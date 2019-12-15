@@ -1,0 +1,10 @@
+domain: lukeaddison.co.uk
+repo: github.com/dippynark/cluster-api-provider-kubernetes
+resources:
+- group: infrastructure
+  kind: KubernetesCluster
+  version: v1alpha1
+- group: infrastructure
+  kind: KubernetesMachine
+  version: v1alpha1
+version: "2"

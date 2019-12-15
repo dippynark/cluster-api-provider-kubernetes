@@ -1,0 +1,20 @@
+# permissions to do viewer kubernetesclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernetescluster-viewer-role
+rules:
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesclusters/status
+  verbs:
+  - get

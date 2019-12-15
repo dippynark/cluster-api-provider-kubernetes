@@ -1,0 +1,26 @@
+# permissions to do edit kubernetesclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernetescluster-editor-role
+rules:
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesclusters/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,7 @@
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
+kind: KubernetesCluster
+metadata:
+  name: kubernetescluster-sample
+spec:
+  # Add fields here
+  foo: bar
