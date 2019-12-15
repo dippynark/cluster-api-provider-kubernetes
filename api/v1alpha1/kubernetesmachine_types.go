@@ -19,25 +19,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	// MachineFinalizer allows ReconcileKubernetesMachine to clean up resources
+	// associated with KubernetesMachine before removing it from the apiserver.
+	MachineFinalizer = "kubernetesmachine.infrastructure.lukeaddison.co.uk"
+)
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of KubernetesMachine. Edit KubernetesMachine_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// ProviderID will be the pod uid in ProviderID format
+	// (kubernetes:////<poduid>)
+	// +optional
+	ProviderID *string `json:"providerID,omitempty"`
 }
 
 // KubernetesMachineStatus defines the observed state of KubernetesMachine
 type KubernetesMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Ready denotes that the machine (kubernetes pod) is ready
+	Ready bool `json:"ready"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:categories=cluster-api
 
 // KubernetesMachine is the Schema for the kubernetesmachines API
 type KubernetesMachine struct {

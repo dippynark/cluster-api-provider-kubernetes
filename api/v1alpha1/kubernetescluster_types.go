@@ -19,25 +19,38 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	// ClusterFinalizer allows KubernetesClusterReconciler to clean up resources
+	// associated with KubernetesCluster before removing it from the apiserver.
+	ClusterFinalizer = "kubernetescluster.infrastructure.lukeaddison.co.uk"
+)
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
-type KubernetesClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of KubernetesCluster. Edit KubernetesCluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
-}
+type KubernetesClusterSpec struct{}
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
+	Ready bool `json:"ready"`
+
+	// APIEndpoints represents the endpoints to communicate with the control
+	// plane.
+	// +optional
+	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
+}
+
+// APIEndpoint represents a reachable Kubernetes API endpoint.
+type APIEndpoint struct {
+	// Host is the hostname on which the API server is serving.
+	Host string `json:"host"`
+
+	// Port is the port on which the API server is serving.
+	Port int `json:"port"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:categories=cluster-api
 
 // KubernetesCluster is the Schema for the kubernetesclusters API
 type KubernetesCluster struct {
