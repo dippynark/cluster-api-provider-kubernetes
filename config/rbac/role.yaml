@@ -7,6 +7,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+- apiGroups:
   - infrastructure.lukeaddison.co.uk
   resources:
   - kubernetesclusters
