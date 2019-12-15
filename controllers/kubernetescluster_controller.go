@@ -17,13 +17,32 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrastructurev1alpha1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+)
+
+const (
+	clusterControllerName = "KubernetesCluster-controller"
 )
 
 // KubernetesClusterReconciler reconciles a KubernetesCluster object
@@ -36,17 +55,148 @@ type KubernetesClusterReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.lukeaddison.co.uk,resources=kubernetesclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.lukeaddison.co.uk,resources=kubernetesclusters/status,verbs=get;update;patch
 
-func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("kubernetescluster", req.NamespacedName)
+func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
+	ctx := context.Background()
+	log := log.Log.WithName(clusterControllerName).WithValues("kubernetes-cluster", req.NamespacedName)
 
-	// your logic here
+	// Fetch the KubernetesCluster instance
+	kubernetesCluster := &capkv1.KubernetesCluster{}
+	if err := r.Client.Get(ctx, req.NamespacedName, kubernetesCluster); err != nil {
+		if k8serrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	// Fetch the Cluster.
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, kubernetesCluster.ObjectMeta)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cluster == nil {
+		log.Info("Waiting for Cluster Controller to set OwnerRef on KubernetesCluster")
+		return ctrl.Result{}, nil
+	}
+
+	log = log.WithValues("cluster", cluster.Name)
+
+	// Initialize the patch helper
+	patchHelper, err := patch.NewHelper(kubernetesCluster, r)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	// Always attempt to Patch the KubernetesCluster object and status after each reconciliation.
+	defer func() {
+		if err := patchHelper.Patch(ctx, kubernetesCluster); err != nil {
+			log.Error(err, "failed to patch KubernetesCluster")
+			if rerr == nil {
+				rerr = err
+			}
+		}
+	}()
+
+	// Handle deleted clusters
+	if !kubernetesCluster.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(kubernetesCluster)
+	}
+
+	// Handle non-deleted clusters
+	return r.reconcileNormal(kubernetesCluster)
 }
 
 func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.KubernetesCluster{}).
+		For(&infrav1.KubernetesCluster{}).
+		Watches(
+			&source.Kind{Type: &clusterv1.Cluster{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("KubernetesCluster")),
+			},
+		).
 		Complete(r)
+}
+
+func (r *KubernetesClusterReconciler) reconcileNormal(kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+	// If the KubernetesCluster doesn't have finalizer, add it.
+	if !util.Contains(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer) {
+		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
+	}
+
+	// Create load balancer service
+	clusterService := &corev1.Service{}
+	err := r.Get(context.TODO(), types.NamespacedName{
+		Namespace: kubernetesCluster.Namespace,
+		Name:      clusterServiceName(kubernetesCluster),
+	}, clusterService)
+	if k8serrors.IsNotFound(err) {
+		return r.createClusterService(kubernetesCluster)
+	}
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Ensure load balancer is controlled by kubernetes cluster
+	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
+		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+	}
+
+	// Mark the kubernetesCluster ready
+	kubernetesCluster.Status.Ready = true
+
+	return ctrl.Result{}, nil
+}
+
+func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+	// Delete load balancer service
+	clusterService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterServiceName(kubernetesCluster),
+			Namespace: kubernetesCluster.Namespace,
+		},
+	}
+	err := r.Delete(context.TODO(), clusterService)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
+	// Cluster is deleted so remove the finalizer.
+	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
+
+	return ctrl.Result{}, nil
+}
+
+func clusterServiceName(kubernetesCluster *infrav1.KubernetesCluster) string {
+	return fmt.Sprintf("%s-kubernetes", kubernetesCluster.Name)
+}
+
+func (r *KubernetesClusterReconciler) createClusterService(kubernetesCluster *infrav1.KubernetesCluster) (ctrl.Result, error) {
+
+	clusterService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterServiceName(kubernetesCluster),
+			Namespace: kubernetesCluster.Namespace,
+			Labels: map[string]string{
+				clusterv1.MachineClusterLabelName: kubernetesCluster.Name,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				clusterv1.MachineClusterLabelName:      kubernetesCluster.Name,
+				clusterv1.MachineControlPlaneLabelName: "true",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "https",
+					Protocol:   "TCP",
+					Port:       443,
+					TargetPort: intstr.FromInt(6443),
+				},
+			},
+		},
+	}
+	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, r.Create(context.TODO(), clusterService)
 }
