@@ -18,9 +18,13 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
+	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -28,9 +32,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
+	coreV1Client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
 	"sigs.k8s.io/cluster-api/util"
@@ -47,13 +50,12 @@ import (
 const (
 	machineControllerName = "KubernetesMachine-controller"
 	defaultImageName      = "kindest/node"
-	defaultImageTag       = "v1.16.3"
 )
 
 // KubernetesMachineReconciler reconciles a KubernetesMachine object
 type KubernetesMachineReconciler struct {
 	client.Client
-	*rest.RESTClient
+	*coreV1Client.CoreV1Client
 	*rest.Config
 	Log    logr.Logger
 	Scheme *runtime.Scheme
@@ -137,7 +139,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(cluster, machine, kubernetesMachine)
+		return r.reconcileDelete(cluster, machine, kubernetesMachine, log)
 	}
 
 	// Handle non-deleted machines
@@ -224,10 +226,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      machinePodName(cluster, kubernetesMachine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		if util.IsControlPlaneMachine(machine) {
-			return r.createControlPlaneMachinePod(cluster, kubernetesMachine)
-		}
-		return r.createWorkerMachinePod(cluster, kubernetesMachine)
+		return r.createMachinePod(cluster, machine, kubernetesMachine)
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -241,7 +240,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// exec bootstrap
 	// NB. this step is necessary to mimic the behaviour of cloud-init that is embedded in the base images
 	// for other cloud providers
-	if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data); err != nil {
+	if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data, log); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to exec KubernetesMachine bootstrap")
 	}
 
@@ -264,6 +263,24 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
+func (r *KubernetesMachineReconciler) execBootstrap(machinePod *corev1.Pod, data string, log logr.Logger) error {
+
+	cloudConfig, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode machine's bootstrap data")
+	}
+
+	log.Info("Running machine bootstrap scripts")
+	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePod.Name, machinePod.Namespace, "kind")
+	lines, err := cloudinit.Run(cloudConfig, machinePodKindCmder)
+	if err != nil {
+		log.Error(err, strings.Join(lines, "\n"))
+		return errors.Wrap(err, "failed to join node with kubeadm")
+	}
+
+	return nil
+}
+
 func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, kubernetesMachine *infrav1.KubernetesMachine, machinePod *corev1.Pod, log logr.Logger) error {
 
 	providerID, err := providerID(machinePod)
@@ -271,97 +288,40 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 		return err
 	}
 	patch := fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID)
-	req := r.Post().
-		Resource("pods").
-		Name(machinePod.Name).
-		Namespace(machinePod.Namespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Container: "kind",
-			Command: []string{
-				"kubectl",
-				"--kubeconfig", "/etc/kubernetes/admin.conf",
-				"patch",
-				"node", machinePodName(cluster, kubernetesMachine),
-				"--patch", patch,
-			},
-			Stdin:  false,
-			Stdout: true,
-			Stderr: true,
-			TTY:    false,
-		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(r.Config, "POST", req.URL())
-	if err != nil {
-		return err
-	}
+	log.Info("Setting node provider ID")
+	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePodName(cluster, kubernetesMachine), kubernetesMachine.Namespace, "kind")
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
+	machinePodKindCmd := machinePodKindCmder.Command("kubectl",
+		"--kubeconfig", "/etc/kubernetes/admin.conf",
+		"patch",
+		"node", machinePodName(cluster, kubernetesMachine),
+		"--patch", patch)
+	machinePodKindCmd.SetStdout(stdout)
+	machinePodKindCmd.SetStderr(stderr)
 
-	sopt := remotecommand.StreamOptions{
-		Stdout: stdout,
-		Stderr: stderr,
-		Tty:    false,
-	}
-	err = exec.Stream(sopt)
+	err = machinePodKindCmd.Run()
 	if err != nil {
-		return err
-	}
-
-	if stdout.String() != "" {
-		return errors.Errorf("Pod %s/%s exec stderr: %s", machinePod.Name, machinePod.Namespace, stderr.String())
+		if stderr.String() != "" {
+			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePod.Name, machinePod.Namespace, stderr.String())
+		}
+		return errors.Errorf("Pod %s/%s exec stdout: %s", machinePod.Name, machinePod.Namespace, stdout.String())
 	}
 	log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePod.Name, machinePod.Namespace, stdout.String()))
 
 	return nil
 }
 
-func (r *KubernetesMachineReconciler) execBootstrap(machinePod *corev1.Pod, data string) error {
-
-	/*cloudConfig, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return errors.Wrap(err, "failed to decode machine's bootstrap data")
-	}
-
-	lines, err := cloudinit.Run(cloudConfig, m.container.Cmder())
-	if err != nil {
-		m.log.Error(err, strings.Join(lines, "\n"))
-		return errors.Wrap(err, "failed to join a control plane node with kubeadm")
-	}
-
-	req := r.Post().
-		Resource("pods").
-		Name(machinePod.Name).
-		Namespace(machinePod.Namespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Container: "kind",
-			Command: []string{
-				"bash", "-c", data,
-			},
-			Stdin:  false,
-			Stdout: true,
-			Stderr: true,
-			TTY:    false,
-		}, scheme.ParameterCodec)
-
-	exec, err := remotecommand.NewSPDYExecutor(r.Config, "POST", req.URL())
-	if err != nil {
-		return err
-	}*/
-
-	return nil
-}
-
-func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
-	// if the deleted machine is a control-plane node, exec kubeadm reset so the etcd member hosted
-	// on the machine gets removed in a controlled way
-	/*if util.IsControlPlaneMachine(machine) {
-		if err := externalMachine.KubeadmReset(); err != nil {
+func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, log logr.Logger) (ctrl.Result, error) {
+	// if the deleted machine is a control-plane node, exec kubeadm reset so the
+	// etcd member hosted on the machine gets removed in a controlled way
+	if util.IsControlPlaneMachine(machine) {
+		if err := r.kubeadmReset(cluster, kubernetesMachine, log); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
 		}
-	}*/
+	}
 
 	// Delete the machine
 	machinePod := &corev1.Pod{
@@ -381,7 +341,39 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+// kubeadmReset will run `kubeadm reset` on the machine
+func (r *KubernetesMachineReconciler) kubeadmReset(cluster *clusterv1.Cluster, kubernetesMachine *capkv1.KubernetesMachine, log logr.Logger) error {
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePodName(cluster, kubernetesMachine), kubernetesMachine.Namespace, "kind")
+	machinePodKindCmd := machinePodKindCmder.Command("kubeadm",
+		"reset",
+		"--force")
+	machinePodKindCmd.SetStdout(stdout)
+	machinePodKindCmd.SetStderr(stderr)
+
+	log.Info("Running kubeadm reset on the machine")
+	err := machinePodKindCmd.Run()
+	if err != nil {
+		if stderr.String() != "" {
+			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePodName(cluster, kubernetesMachine), kubernetesMachine.Namespace, stderr.String())
+		}
+		return errors.Errorf("Pod %s/%s exec stdout: %s", machinePodName(cluster, kubernetesMachine), kubernetesMachine.Namespace, stdout.String())
+	}
+	log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePodName(cluster, kubernetesMachine), kubernetesMachine.Namespace, stdout.String()))
+
+	return nil
+}
+
+func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+	if util.IsControlPlaneMachine(machine) {
+		return r.createControlPlaneMachinePod(cluster, machine, kubernetesMachine)
+	}
+	return r.createWorkerMachinePod(cluster, machine, kubernetesMachine)
+}
+
+func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machinePodName(cluster, kubernetesMachine),
@@ -395,7 +387,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			Containers: []corev1.Container{
 				{
 					Name:  "kind",
-					Image: fmt.Sprintf("%s:%s", defaultImageName, defaultImageTag),
+					Image: fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version),
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "https",
@@ -458,7 +450,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
-func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 

@@ -22,11 +22,9 @@ import (
 	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	coreV1Client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -80,22 +78,20 @@ func main() {
 
 	// Initialise rest client
 	config := mgr.GetConfig()
-	config.ContentConfig.GroupVersion = &schema.GroupVersion{Group: infrav1.GroupVersion.Group, Version: infrav1.GroupVersion.Version}
-	config.APIPath = "/apis"
-	config.NegotiatedSerializer = serializer.NewCodecFactory(mgr.GetScheme())
-	config.UserAgent = rest.DefaultKubernetesUserAgent()
-	restClient, err := rest.RESTClientFor(config)
+
+	// Create a Kubernetes core/v1 client.
+	coreV1Client, err := coreV1Client.NewForConfig(config)
 	if err != nil {
-		setupLog.Error(err, "unable to initialise rest client")
+		setupLog.Error(err, "unable to initialise core client")
 		os.Exit(1)
 	}
 
 	if err = (&controllers.KubernetesMachineReconciler{
-		Client:     mgr.GetClient(),
-		RESTClient: restClient,
-		Config:     config,
-		Log:        ctrl.Log.WithName("controllers").WithName("KubernetesMachine"),
-		Scheme:     mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		CoreV1Client: coreV1Client,
+		Config:       config,
+		Log:          ctrl.Log.WithName("controllers").WithName("KubernetesMachine"),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "KubernetesMachine")
 		os.Exit(1)
