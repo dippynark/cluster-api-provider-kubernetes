@@ -76,10 +76,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialise rest client
-	config := mgr.GetConfig()
-
 	// Create a Kubernetes core/v1 client.
+	config := mgr.GetConfig()
 	coreV1Client, err := coreV1Client.NewForConfig(config)
 	if err != nil {
 		setupLog.Error(err, "unable to initialise core client")
