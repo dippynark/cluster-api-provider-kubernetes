@@ -12,8 +12,8 @@ rules:
   - pods
   verbs:
   - create
-  - delete
   - get
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -22,6 +22,7 @@ rules:
   - create
   - delete
   - get
+  - watch
 - apiGroups:
   - infrastructure.lukeaddison.co.uk
   resources:

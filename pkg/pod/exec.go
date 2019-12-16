@@ -58,11 +58,10 @@ type containerCmd struct {
 
 func (c *containerCmd) Run() error {
 
-	// TODO: make stdin optional
-	/*stdin := false
+	stdin := false
 	if c.stdin != nil {
 		stdin = true
-	}*/
+	}
 	stdout := false
 	if c.stdout != nil {
 		stdout = true
@@ -79,7 +78,7 @@ func (c *containerCmd) Run() error {
 		VersionedParams(&corev1.PodExecOptions{
 			Container: c.containerName,
 			Command:   c.command,
-			Stdin:     true, // TODO: make stdin optional
+			Stdin:     stdin,
 			Stdout:    stdout,
 			Stderr:    stderr,
 			TTY:       false,

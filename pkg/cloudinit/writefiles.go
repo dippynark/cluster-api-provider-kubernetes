@@ -71,7 +71,8 @@ func (a *writeFilesAction) Run(cmder exec.Cmder) ([]string, error) {
 		// Make the directory so cat + redirection will work
 		directory := filepath.Dir(path)
 		lines = append(lines, fmt.Sprintf("%s mkdir -p %s\n", prompt, directory))
-		if err := cmder.Command("/bin/sh", "-c", fmt.Sprintf("mkdir -p %q", directory)).Run(); err != nil {
+		// TODO: use Run instead of CombinedOutputLines
+		if _, err := exec.CombinedOutputLines(cmder.Command("/bin/sh", "-c", fmt.Sprintf("mkdir -p %q", directory))); err != nil {
 			return lines, errors.Wrapf(err, fmt.Sprintf("failed to create directory"))
 		}
 
@@ -95,7 +96,8 @@ func (a *writeFilesAction) Run(cmder exec.Cmder) ([]string, error) {
 		if permissions != "0644" {
 			// Add a line in the output that mimics the command being issues at the command line
 			lines = append(lines, fmt.Sprintf("%s chmod %s %s", prompt, permissions, path))
-			if err := cmder.Command("chmod", permissions, path).Run(); err != nil {
+			// TODO: use Run instead of CombinedOutputLines
+			if _, err := exec.CombinedOutputLines(cmder.Command("chmod", permissions, path)); err != nil {
 				// Add a line in the output with the error message and exit
 				lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
 				return lines, errors.Wrapf(errors.WithStack(err), "error setting permissions for %s", path)
@@ -106,7 +108,8 @@ func (a *writeFilesAction) Run(cmder exec.Cmder) ([]string, error) {
 		if owner != "root:root" {
 			// Add a line in the output that mimics the command being issues at the command line
 			lines = append(lines, fmt.Sprintf("%s chown %s %s", prompt, owner, path))
-			if err := cmder.Command("chown", owner, path).Run(); err != nil {
+			// TODO: use Run instead of CombinedOutputLines
+			if _, err := exec.CombinedOutputLines(cmder.Command("chown", owner, path)); err != nil {
 				// Add a line in the output with the error message and exit
 				lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
 				return lines, errors.Wrapf(errors.WithStack(err), "error setting ownership for %s", path)

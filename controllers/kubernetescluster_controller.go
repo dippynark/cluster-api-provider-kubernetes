@@ -54,7 +54,7 @@ type KubernetesClusterReconciler struct {
 
 // +kubebuilder:rbac:groups=infrastructure.lukeaddison.co.uk,resources=kubernetesclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.lukeaddison.co.uk,resources=kubernetesclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;create;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;watch;create;delete
 
 func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	ctx := context.Background()
@@ -98,11 +98,11 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	// Handle deleted clusters
 	if !kubernetesCluster.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(kubernetesCluster)
+		return r.reconcileDelete(cluster, kubernetesCluster)
 	}
 
 	// Handle non-deleted clusters
-	return r.reconcileNormal(kubernetesCluster)
+	return r.reconcileNormal(cluster, kubernetesCluster)
 }
 
 func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -114,10 +114,40 @@ func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				ToRequests: util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("KubernetesCluster")),
 			},
 		).
+		Watches(
+			&source.Kind{Type: &corev1.Service{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: handler.ToRequestsFunc(r.ServiceToKubernetesCluster),
+			},
+		).
 		Complete(r)
 }
 
-func (r *KubernetesClusterReconciler) reconcileNormal(kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+// ServiceToKubernetesCluster is a handler.ToRequestsFunc to be used to enqeue
+// requests for reconciliation of KubernetesClusters
+func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapObject) []ctrl.Request {
+	result := []ctrl.Request{}
+	s, ok := o.Object.(*corev1.Service)
+	if !ok {
+		r.Log.Error(errors.Errorf("expected a Service but got a %T", o.Object), "failed to get KubernetesCluster for Service")
+		return nil
+	}
+	log := r.Log.WithValues("Service", s.Name, "Namespace", s.Namespace)
+
+	// Only watch services owned by a kubernetescluster
+	ref := metav1.GetControllerOf(s)
+	if ref == nil || (ref.Kind != "KubernetesCluster" || ref.APIVersion != infrav1.GroupVersion.String()) {
+		return nil
+	}
+	log.Info(fmt.Sprintf("Found Service owned by KubernetesCluster %s/%s", s.Namespace, ref.Name))
+	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
+	result = append(result, ctrl.Request{NamespacedName: name})
+
+	return result
+
+}
+
+func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 	// If the KubernetesCluster doesn't have finalizer, add it.
 	if !util.Contains(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer) {
 		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
@@ -127,10 +157,10 @@ func (r *KubernetesClusterReconciler) reconcileNormal(kubernetesCluster *capkv1.
 	clusterService := &corev1.Service{}
 	err := r.Get(context.TODO(), types.NamespacedName{
 		Namespace: kubernetesCluster.Namespace,
-		Name:      clusterServiceName(kubernetesCluster),
+		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		return r.createClusterService(kubernetesCluster)
+		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -138,7 +168,15 @@ func (r *KubernetesClusterReconciler) reconcileNormal(kubernetesCluster *capkv1.
 
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
-		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+		return ctrl.Result{}, errors.Errorf("expected Service %s in Namespace %s to be controlled by KubernetesCluster %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+	}
+
+	// Update api endpoints
+	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
+		{
+			Host: clusterService.Spec.ClusterIP,
+			Port: int(clusterService.Spec.Ports[0].Port),
+		},
 	}
 
 	// Mark the kubernetesCluster ready
@@ -147,12 +185,12 @@ func (r *KubernetesClusterReconciler) reconcileNormal(kubernetesCluster *capkv1.
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+func (r *KubernetesClusterReconciler) reconcileDelete(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 	// Delete load balancer service
 	clusterService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterServiceName(kubernetesCluster),
-			Namespace: kubernetesCluster.Namespace,
+			Name:      clusterServiceName(cluster),
+			Namespace: cluster.Namespace,
 		},
 	}
 	err := r.Delete(context.TODO(), clusterService)
@@ -160,29 +198,25 @@ func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.
 		return ctrl.Result{}, err
 	}
 
-	// Cluster is deleted so remove the finalizer.
+	// KubernetesCluster is deleted so remove the finalizer.
 	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
 
 	return ctrl.Result{}, nil
 }
 
-func clusterServiceName(kubernetesCluster *infrav1.KubernetesCluster) string {
-	return fmt.Sprintf("%s-kubernetes", kubernetesCluster.Name)
-}
-
-func (r *KubernetesClusterReconciler) createClusterService(kubernetesCluster *infrav1.KubernetesCluster) (ctrl.Result, error) {
+func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 
 	clusterService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterServiceName(kubernetesCluster),
-			Namespace: kubernetesCluster.Namespace,
+			Name:      clusterServiceName(cluster),
+			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: kubernetesCluster.Name,
+				clusterv1.MachineClusterLabelName: cluster.Name,
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				clusterv1.MachineClusterLabelName:      kubernetesCluster.Name,
+				clusterv1.MachineClusterLabelName:      cluster.Name,
 				clusterv1.MachineControlPlaneLabelName: "true",
 			},
 			Ports: []corev1.ServicePort{
@@ -200,4 +234,8 @@ func (r *KubernetesClusterReconciler) createClusterService(kubernetesCluster *in
 	}
 
 	return ctrl.Result{}, r.Create(context.TODO(), clusterService)
+}
+
+func clusterServiceName(cluster *clusterv1.Cluster) string {
+	return fmt.Sprintf("%s-lb", cluster.Name)
 }
