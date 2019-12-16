@@ -269,7 +269,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Check if machine pod is running
 	if machinePod.Status.Phase != corev1.PodRunning {
-		r.Log.Info(fmt.Sprintf("Waiting for Pod %s/%s to be running", machinePod.Namespace, machinePod.Name))
+		r.Log.Info(fmt.Sprintf("Pod %s/%s is not running", machinePod.Namespace, machinePod.Name))
 		return ctrl.Result{}, nil
 	}
 
