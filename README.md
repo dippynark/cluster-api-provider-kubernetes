@@ -60,6 +60,12 @@ apiVersion: cluster.x-k8s.io/v1alpha2
 metadata:
   name: example
 spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["10.192.0.0/12"]
+    pods:
+      cidrBlocks: ["192.168.0.0/16"]
+    serviceDomain: "cluster.local"
   infrastructureRef:
     kind: KubernetesCluster
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
@@ -113,6 +119,11 @@ spec:
   version: "v1.14.2"
 EOF
 )
+# untaint master
+kubectl exec -it example-controller -- kubectl --kubeconfig /etc/kubernetes/admin.conf taint node --all node-role.kubernetes.io/master-
+# Install some overlay and cni plugin
+# https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less#installing-with-the-kubernetes-api-datastore50-nodes-or-less
+kubectl exec -it example-controller -- kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
 # Exec into controller node and interact!
 kubectl exec -it example-controller -- kubectl get nodes --kubeconfig /etc/kubernetes/admin.conf
 ```
