@@ -110,7 +110,7 @@ spec:
     kind: KubernetesMachine
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
     name: controller
-  version: "v1.16.2"
+  version: "v1.14.2"
 EOF
 )
 # Exec into controller node and interact!
