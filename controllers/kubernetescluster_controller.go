@@ -42,7 +42,9 @@ import (
 )
 
 const (
-	clusterControllerName = "KubernetesCluster-controller"
+	clusterControllerName   = "KubernetesCluster-controller"
+	kubeAPIServerPortName   = "kube-apiserver"
+	clusterLoadBalancerPort = 443
 )
 
 // KubernetesClusterReconciler reconciles a KubernetesCluster object
@@ -175,7 +177,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Update api endpoints
 	host := clusterService.Spec.ClusterIP
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
-		// TODO: consider other elements of ingress array
+		// TODO: consider all elements of ingress array
 		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
 			r.Log.Info("Waiting for loadbalancer to be provisioned")
 			return ctrl.Result{}, nil
@@ -193,7 +195,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
 		{
 			Host: host,
-			Port: int(clusterService.Spec.Ports[0].Port),
+			Port: clusterLoadBalancerPort,
 		},
 	}
 
@@ -241,8 +243,8 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 				{
 					Name:       "https",
 					Protocol:   "TCP",
-					Port:       443,
-					TargetPort: intstr.FromInt(6443),
+					Port:       clusterLoadBalancerPort,
+					TargetPort: intstr.FromString(kubeAPIServerPortName),
 				},
 			},
 			Type: kubernetesCluster.Spec.ServiceType,

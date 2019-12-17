@@ -452,7 +452,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 					Image: machinePodImage(machine),
 					Ports: []corev1.ContainerPort{
 						{
-							Name:          "https",
+							Name:          kubeAPIServerPortName,
 							Protocol:      "TCP",
 							ContainerPort: 6443,
 						},
