@@ -13,7 +13,7 @@ assuming use of GKE here, but other clusters that support LoadBalancer Services
 could be used similarly (support for clusters that do no support LoadBalancer
 Services coming shortly).
 
-> WARNING: the follow will cost money - consider using the [GCP Free
+> WARNING: the following will cost money - consider using the [GCP Free
 > Tier](https://cloud.google.com/free/)
 
 ```sh
