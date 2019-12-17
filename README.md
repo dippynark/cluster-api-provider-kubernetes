@@ -1,8 +1,8 @@
 # cluster-api-provider-kubernetes
 
-This project implements the [Cluster Infrastructure Provider
-API](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure)
-for Kubernetes clusters.
+This project is a [Cluster API
+Provider](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure)
+implementation for Kubernetes clusters.
 
 Pods running [kind](https://github.com/kubernetes-sigs/kind) are created and
 configured to serve as Nodes which form a cluster.
