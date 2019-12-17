@@ -212,4 +212,6 @@ kubectl get nodes
 # Tear down cluster
 unset KUBECONFIG
 kubectl delete cluster example
+# clean up infrastructure
+gcloud container clusters delete management-cluster --async
 ```
