@@ -369,8 +369,24 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 	// if the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
 	if util.IsControlPlaneMachine(machine) {
-		if err := r.kubeadmReset(cluster, machine); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
+		// Check if machine pod exists
+		machinePod := &corev1.Pod{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: machine.Namespace,
+			Name:      machinePodName(cluster, machine),
+		}, machinePod)
+		// Check we found a pod...
+		if !k8serrors.IsNotFound(err) {
+			// ...and we didn't encounter another error
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// Ensure machine pod is controlled by kubernetes machine
+			if ref := metav1.GetControllerOf(machinePod); ref != nil && ref.UID == kubernetesMachine.UID {
+				if err := r.kubeadmReset(cluster, machine); err != nil {
+					return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
+				}
+			}
 		}
 	}
 
