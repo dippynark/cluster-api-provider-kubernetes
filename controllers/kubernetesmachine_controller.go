@@ -457,6 +457,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 							MountPath: "/var/lib/etcd",
 						},
 					},
+					Resources: kubernetesMachine.Spec.Resources,
 				},
 			},
 			Volumes: []corev1.Volume{
@@ -524,6 +525,7 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 							MountPath: "/var/lib/containerd",
 						},
 					},
+					Resources: kubernetesMachine.Spec.Resources,
 				},
 			},
 			Volumes: []corev1.Volume{

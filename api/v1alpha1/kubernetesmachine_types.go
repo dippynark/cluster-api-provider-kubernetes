@@ -16,6 +16,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +31,8 @@ type KubernetesMachineSpec struct {
 	// ProviderID will be the pod uid in ProviderID format
 	// (kubernetes:////<poduid>)
 	// +optional
-	ProviderID *string `json:"providerID,omitempty"`
+	ProviderID *string                     `json:"providerID,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // KubernetesMachineStatus defines the observed state of KubernetesMachine

@@ -106,6 +106,11 @@ kind: KubernetesMachine
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: controller
+spec:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 200Mi
 ---
 kind: Machine
 apiVersion: cluster.x-k8s.io/v1alpha2
@@ -179,7 +184,11 @@ metadata:
   name: worker
 spec:
   template:
-    spec: {}
+    spec:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
 EOF
 )
 # Check that the node pods are being created
