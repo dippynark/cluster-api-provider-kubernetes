@@ -19,6 +19,7 @@ import (
 	"flag"
 	"os"
 
+	infrastructurev1alpha1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +42,7 @@ func init() {
 	_ = clusterv1.AddToScheme(scheme)
 
 	_ = infrav1.AddToScheme(scheme)
+	_ = infrastructurev1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
