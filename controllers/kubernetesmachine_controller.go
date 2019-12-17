@@ -25,6 +25,7 @@ import (
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
+	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -48,9 +49,10 @@ import (
 )
 
 const (
-	machineControllerName = "KubernetesMachine-controller"
-	defaultImageName      = "kindest/node"
-	kindContainerName     = "kind"
+	machineControllerName      = "KubernetesMachine-controller"
+	defaultImageName           = "kindest/node"
+	kindContainerName          = "kind"
+	bootstrappedAnnotationName = "infrastructure.lukeaddison.co.uk/bootstrapped"
 )
 
 // KubernetesMachineReconciler reconciles a KubernetesMachine object
@@ -241,17 +243,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
 	}
 
-	// if the machine is already provisioned, return
-	if kubernetesMachine.Spec.ProviderID != nil {
-		return ctrl.Result{}, nil
-	}
-
-	// Make sure bootstrap data is available and populated.
-	if machine.Spec.Bootstrap.Data == nil {
-		r.Log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-		return ctrl.Result{}, nil
-	}
-
 	// Check if machine pod already exists
 	machinePod := &corev1.Pod{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{
@@ -270,17 +261,37 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", machinePod.Name, machinePod.Namespace, kubernetesMachine.Name)
 	}
 
-	// Check if machine pod is running
-	if machinePod.Status.Phase != corev1.PodRunning {
-		r.Log.Info(fmt.Sprintf("Pod %s/%s is not running", machinePod.Namespace, machinePod.Name))
-		return ctrl.Result{}, nil
+	// Check whether machine has already been bootstrapped
+	if bootstrappedAnnotationValue, ok := machinePod.ObjectMeta.Annotations[bootstrappedAnnotationName]; !ok || bootstrappedAnnotationValue != "true" {
+
+		// Check if machine pod is ready
+		if !utils.IsPodReady(machinePod) {
+			r.Log.Info(fmt.Sprintf("Pod %s/%s is not ready", machinePod.Namespace, machinePod.Name))
+			return ctrl.Result{}, nil
+		}
+
+		// Make sure bootstrap data is available and populated.
+		if machine.Spec.Bootstrap.Data == nil {
+			r.Log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+			return ctrl.Result{}, nil
+		}
+
+		// exec bootstrap
+		// NB. this step is necessary to mimic the behaviour of cloud-init that is embedded in the base images
+		// for other cloud providers
+		if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to exec KubernetesMachine bootstrap")
+		}
+
+		// Mark pod as bootstrapped
+		machinePod.ObjectMeta.Annotations[bootstrappedAnnotationName] = "true"
+		return ctrl.Result{}, r.Client.Update(context.TODO(), machinePod)
 	}
 
-	// exec bootstrap
-	// NB. this step is necessary to mimic the behaviour of cloud-init that is embedded in the base images
-	// for other cloud providers
-	if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to exec KubernetesMachine bootstrap")
+	// If the machine has already been provisioned, return
+	// TODO: this shouldn't change, but should we set it just in case?
+	if kubernetesMachine.Spec.ProviderID != nil {
+		return ctrl.Result{}, nil
 	}
 
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
@@ -294,6 +305,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	kubernetesMachine.Spec.ProviderID = &providerID
 
 	// Mark the kubernetesMachine ready
+	// TODO: should ready ever go back to false?
 	kubernetesMachine.Status.Ready = true
 
 	return ctrl.Result{}, nil
