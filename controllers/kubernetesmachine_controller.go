@@ -290,10 +290,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Set ProviderID so the Cluster API Machine Controller can pull it
-	providerID, err := providerID(machinePod)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	providerID := providerID(cluster, machinePod)
 	kubernetesMachine.Spec.ProviderID = &providerID
 
 	// Mark the kubernetesMachine ready
@@ -341,21 +338,17 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 	r.Log.Info("Setting node provider ID")
 	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, controllerPod.Name, machine.Namespace, "kind")
 
-	providerID, err := providerID(machinePod)
-	if err != nil {
-		return err
-	}
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	machinePodKindCmd := machinePodKindCmder.Command("kubectl",
 		"--kubeconfig", "/etc/kubernetes/admin.conf",
 		"patch",
 		"node", machinePodName(cluster, machine),
-		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID))
+		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID(cluster, machinePod)))
 	machinePodKindCmd.SetStdout(stdout)
 	machinePodKindCmd.SetStderr(stderr)
 
-	err = machinePodKindCmd.Run()
+	err := machinePodKindCmd.Run()
 	if err != nil {
 		if stderr.String() != "" {
 			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePod.Name, machinePod.Namespace, stderr.String())
@@ -580,12 +573,8 @@ func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) stri
 	return fmt.Sprintf("%s-%s", cluster.Name, machine.Name)
 }
 
-func providerID(machinePod *corev1.Pod) (string, error) {
-	uid := machinePod.GetUID()
-	if uid == "" {
-		return "", errors.Errorf("Pod %s/%s UID is empty", machinePod.Namespace, machinePod.Name)
-	}
-	return fmt.Sprintf("kubernetes:////%s", uid), nil
+func providerID(cluster *clusterv1.Cluster, machinePod *corev1.Pod) string {
+	return fmt.Sprintf("kubernetes://%s/%s", cluster.Name, machinePod.Name)
 }
 
 func kubeconfigSecretName(cluster *clusterv1.Cluster) string {
