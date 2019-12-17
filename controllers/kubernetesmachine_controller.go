@@ -50,6 +50,7 @@ import (
 const (
 	machineControllerName = "KubernetesMachine-controller"
 	defaultImageName      = "kindest/node"
+	kindContainerName     = "kind"
 )
 
 // KubernetesMachineReconciler reconciles a KubernetesMachine object
@@ -319,14 +320,29 @@ func (r *KubernetesMachineReconciler) execBootstrap(machinePod *corev1.Pod, data
 
 func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
 
+	// Find controller pod
+	labels := map[string]string{
+		clusterv1.MachineClusterLabelName:      cluster.Name,
+		clusterv1.MachineControlPlaneLabelName: "true",
+	}
+	podList := &corev1.PodList{}
+	if err := r.Client.List(context.TODO(), podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
+		r.Log.Error(err, fmt.Sprintf("failed to list controller Pods for Cluster %s/%s", cluster.Namespace, cluster.Name))
+		return err
+	}
+	if len(podList.Items) == 0 {
+		return errors.New("Unable to find controller Pod for Cluster")
+	}
+	// TODO: consider other controller pods
+	controllerPod := podList.Items[0]
+
+	r.Log.Info("Setting node provider ID")
+	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, controllerPod.Name, machine.Namespace, "kind")
+
 	providerID, err := providerID(machinePod)
 	if err != nil {
 		return err
 	}
-
-	r.Log.Info("Setting node provider ID")
-	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePodName(cluster, machine), machine.Namespace, "kind")
-
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	machinePodKindCmd := machinePodKindCmder.Command("kubectl",
@@ -397,6 +413,7 @@ func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluste
 }
 
 func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+	directory := corev1.HostPathDirectory
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machinePodName(cluster, machine),
@@ -407,10 +424,14 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			},
 		},
 		Spec: corev1.PodSpec{
+			DNSPolicy: "None",
+			DNSConfig: &corev1.PodDNSConfig{
+				Nameservers: []string{"8.8.8.8", "8.8.4.4"},
+			},
 			Containers: []corev1.Container{
 				{
-					Name:  "kind",
-					Image: fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version),
+					Name:  kindContainerName,
+					Image: machinePodImage(machine),
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "https",
@@ -428,12 +449,12 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 							ReadOnly:  true,
 						},
 						{
-							Name:      "tmp",
-							MountPath: "/tmp",
+							Name:      "var-lib-containerd",
+							MountPath: "/var/lib/containerd",
 						},
 						{
-							Name:      "run",
-							MountPath: "/run",
+							Name:      "var-lib-etcd",
+							MountPath: "/var/lib/etcd",
 						},
 					},
 				},
@@ -444,23 +465,20 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 					VolumeSource: corev1.VolumeSource{
 						HostPath: &corev1.HostPathVolumeSource{
 							Path: "/lib/modules",
+							Type: &directory,
 						},
 					},
 				},
 				{
-					Name: "tmp",
+					Name: "var-lib-containerd",
 					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{
-							Medium: "Memory",
-						},
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 				{
-					Name: "run",
+					Name: "var-lib-etcd",
 					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{
-							Medium: "Memory",
-						},
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 			},
@@ -474,7 +492,68 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 }
 
 func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
-	return ctrl.Result{}, nil
+	directory := corev1.HostPathDirectory
+	machinePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machinePodName(cluster, machine),
+			Namespace: machine.Namespace,
+			Labels: map[string]string{
+				clusterv1.MachineClusterLabelName: cluster.Name,
+			},
+		},
+		Spec: corev1.PodSpec{
+			DNSPolicy: "None",
+			DNSConfig: &corev1.PodDNSConfig{
+				Nameservers: []string{"8.8.8.8", "8.8.4.4"},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  kindContainerName,
+					Image: machinePodImage(machine),
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: pointer.BoolPtr(true),
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "lib-modules",
+							MountPath: "/lib/modules",
+							ReadOnly:  true,
+						},
+						{
+							Name:      "var-lib-containerd",
+							MountPath: "/var/lib/containerd",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "lib-modules",
+					VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{
+							Path: "/lib/modules",
+							Type: &directory,
+						},
+					},
+				},
+				{
+					Name: "var-lib-containerd",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+			},
+		},
+	}
+	if err := controllerutil.SetControllerReference(kubernetesMachine, machinePod, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
+}
+
+func machinePodImage(machine *clusterv1.Machine) string {
+	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
 }
 
 func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {

@@ -172,9 +172,26 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Update api endpoints
+	host := clusterService.Spec.ClusterIP
+	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		// TODO: consider other elements of ingress array
+		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
+			r.Log.Info("Waiting for loadbalancer to be provisioned")
+			return ctrl.Result{}, nil
+		}
+		loadBalancerHost := clusterService.Status.LoadBalancer.Ingress[0].Hostname
+		if loadBalancerHost == "" {
+			loadBalancerHost = clusterService.Status.LoadBalancer.Ingress[0].IP
+		}
+		if loadBalancerHost == "" {
+			r.Log.Info("Waiting for loadbalancer hostname or IP")
+			return ctrl.Result{}, nil
+		}
+		host = loadBalancerHost
+	}
 	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
 		{
-			Host: clusterService.Spec.ClusterIP,
+			Host: host,
 			Port: int(clusterService.Spec.Ports[0].Port),
 		},
 	}
@@ -227,6 +244,7 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 					TargetPort: intstr.FromInt(6443),
 				},
 			},
+			Type: corev1.ServiceTypeLoadBalancer,
 		},
 	}
 	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
