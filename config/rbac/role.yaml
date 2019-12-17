@@ -13,7 +13,14 @@ rules:
   verbs:
   - create
   - get
+  - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
 - apiGroups:
   - ""
   resources:
@@ -22,6 +29,23 @@ rules:
   - create
   - delete
   - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machines
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - infrastructure.lukeaddison.co.uk
