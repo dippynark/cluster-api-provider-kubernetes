@@ -16,6 +16,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,7 +27,10 @@ const (
 )
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
-type KubernetesClusterSpec struct{}
+type KubernetesClusterSpec struct {
+	// +optional
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
+}
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {

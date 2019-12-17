@@ -174,7 +174,6 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Update api endpoints
 	host := clusterService.Spec.ClusterIP
-	// TODO: currently this is certainly true as we create the service
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		// TODO: consider other elements of ingress array
 		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
@@ -246,7 +245,7 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 					TargetPort: intstr.FromInt(6443),
 				},
 			},
-			Type: corev1.ServiceTypeLoadBalancer,
+			Type: kubernetesCluster.Spec.ServiceType,
 		},
 	}
 	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
