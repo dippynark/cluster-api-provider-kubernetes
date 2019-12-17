@@ -198,7 +198,7 @@ EOF
 )
 # Check that the node pods are being created
 kubectl get pods
-# Retrieve kubeconfig
+# Wait for kubeconfig and retrieve
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
 export KUBECONFIG=example-kubeconfig
 # Check that the nodes are registering
