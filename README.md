@@ -24,15 +24,13 @@ gcloud container clusters get-credentials management-cluster
 ### Installation
 
 ```sh
-# Apply cluster api
+# Install cluster api
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.7/cluster-api-components.yaml
-# Apply kubeadm bootstrap provider
+# Install kubeadm bootstrap provider
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
 # Install kubernetes infrastructure crds
 make install
-# Run manager
-make run
-# In a separate window allow cluster api manager to interact with kubernetes infrastructure resources
+# Allow cluster api manager to interact with kubernetes infrastructure resources
 kubectl apply -f <(cat <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -57,7 +55,14 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 EOF
 )
-# Apply cluster infrastructure
+# Run manager
+make run
+```
+
+### Configuration
+
+```sh
+# In a separate window apply cluster infrastructure
 kubectl apply -f <(cat <<EOF
 kind: KubernetesCluster
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
