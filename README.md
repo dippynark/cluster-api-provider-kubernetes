@@ -1,17 +1,31 @@
 # cluster-api-provider-kubernetes
 
-This project implements the [cluster infrastructure
-api](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure)
+This project implements the [Cluster Infrastructure Provider
+API](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure)
 for Kubernetes clusters.
 
-Pods are created to serve as cluster Nodes which then form a cluster.
+Pods running [kind](https://github.com/kubernetes-sigs/kind) are created and
+configured to serve as Nodes which form a cluster.
 
 ## Quickstart
 
-The first thing we need is a cluster to provide the infrastructure. We are
-assuming use of GKE here, but other clusters that support LoadBalancer Services
-could be used similarly (support for clusters that do no support LoadBalancer
-Services coming shortly).
+We will create the infrastructure to run the Cluster API controllers, install
+the controllers and then configure an example cluster using the Kubernetes
+infrastrucutre provider.
+
+### Infrastructure
+
+Any Kubernetes cluster should be suitable, but below are a few examples.
+
+#### kind
+
+```sh
+# install kind: https://github.com/kubernetes-sigs/kind#installation-and-usage
+kind create cluster --name management-cluster
+kind export kubeconfig --name management-cluster
+```
+
+#### GKE
 
 > WARNING: the following will cost money - consider using the [GCP Free
 > Tier](https://cloud.google.com/free/)
@@ -30,7 +44,9 @@ kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/downloa
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
 # Install kubernetes infrastructure crds
 make install
-# Allow cluster api manager to interact with kubernetes infrastructure resources
+# Deploy kubernetes infrastructure provider controller
+make deploy
+# Allow cluster api controller to interact with kubernetes infrastructure resources
 kubectl apply -f <(cat <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -55,19 +71,19 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 EOF
 )
-# Run manager
-make run
 ```
 
 ### Configuration
 
 ```sh
-# In a separate window apply cluster infrastructure
+# Apply cluster infrastructure
 kubectl apply -f <(cat <<EOF
 kind: KubernetesCluster
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: example
+spec: {}
+#  serviceType: LoadBalancer # uncomment on clusters that support loadbalancers
 ---
 kind: Cluster
 apiVersion: cluster.x-k8s.io/v1alpha2
@@ -87,7 +103,8 @@ spec:
 EOF
 )
 # Wait for loadbalancer to be provisioned and retrieve IP address
-LOADBALANCER_IP=$(kubectl get svc example-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+LOADBALANCER_HOST=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].host}')
+LOADBALANCER_PORT=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].port}')
 # Deploy controller machine
 kubectl apply -f <(cat <<EOF
 kind: KubeadmConfig
@@ -102,7 +119,7 @@ spec:
         cgroups-per-qos: "false"
         enforce-node-allocatable: ""
   clusterConfiguration:
-    controlPlaneEndpoint: "$LOADBALANCER_IP:443"
+    controlPlaneEndpoint: "${LOADBALANCER_HOST}:${LOADBALANCER_PORT}"
     controllerManager:
       extraArgs:
         enable-hostpath-provisioner: "true"
@@ -147,7 +164,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: example
     nodepool: default
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: example
@@ -198,20 +215,18 @@ EOF
 )
 # Check that the node pods are being created
 kubectl get pods
-# Wait for kubeconfig and retrieve
+# Retrieve kubeconfig
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
-export KUBECONFIG=example-kubeconfig
-# Check that the nodes are registering
-kubectl get nodes
+# If the loadbalancer is reachable there is no need to port-forward or set an alias
+kubectl port-forward service/example-lb 8080:$LOADBALANCER_PORT
+# In a separate terminal
+alias kubectl='kubectl --kubeconfig example-kubeconfig --server https://127.0.0.1:8080 --insecure-skip-tls-verify=true'
 # Install an overlay and cni plugin
-# Note that this may need to align with the configured pod cidr
+# Note that this needs to align with the configured pod cidr
 # https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
 kubectl apply -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
 # Check that the nodes become ready
 kubectl get nodes
 # Tear down cluster
-unset KUBECONFIG
 kubectl delete cluster example
-# clean up infrastructure
-gcloud container clusters delete management-cluster --async
 ```
