@@ -27,7 +27,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
-	"sigs.k8s.io/kind/pkg/exec"
 )
 
 // writeFilesAction defines a cloud init action that replicates on kund the write_files module
@@ -55,8 +54,8 @@ func (a *writeFilesAction) Unmarshal(userData []byte) error {
 	return nil
 }
 
-func (a *writeFilesAction) Run(cmder exec.Cmder) ([]string, error) {
-	var lines []string //nolint:prealloc
+func (a *writeFilesAction) GenerateScriptBlock() (string, error) {
+	var scriptBlock string
 	for _, f := range a.Files {
 		// Fix attributes and apply defaults
 		path := fixPath(f.Path) //NB. the real cloud init module for writes files converts path into absolute paths; this is not possible here...
@@ -65,58 +64,33 @@ func (a *writeFilesAction) Run(cmder exec.Cmder) ([]string, error) {
 		permissions := fixPermissions(f.Permissions)
 		content, err := fixContent(f.Content, encodings)
 		if err != nil {
-			return lines, errors.Wrapf(err, "error decoding content for %s", path)
+			return scriptBlock, errors.Wrapf(err, "error decoding content for %s", path)
 		}
 
 		// Make the directory so cat + redirection will work
 		directory := filepath.Dir(path)
-		lines = append(lines, fmt.Sprintf("%s mkdir -p %s\n", prompt, directory))
-		// TODO: use Run instead of CombinedOutputLines
-		if _, err := exec.CombinedOutputLines(cmder.Command("/bin/sh", "-c", fmt.Sprintf("mkdir -p %q", directory))); err != nil {
-			return lines, errors.Wrapf(err, fmt.Sprintf("failed to create directory"))
-		}
+		scriptBlock = fmt.Sprintf("%s\nmkdir -p %q", scriptBlock, directory)
 
 		redirects := ">"
 		if f.Append {
 			redirects = ">>"
 		}
 
-		// Add a line in the output that mimics the command being issues at the command line
-		lines = append(lines, fmt.Sprintf("%s cat %s %s << END\n%s\nEND\n", prompt, redirects, path, content))
-		if err := cmder.Command("/bin/sh", "-c", fmt.Sprintf("cat %s %s /dev/stdin", redirects, path)).
-			SetStdin(strings.NewReader(content)).
-			Run(); err != nil {
-			// TODO Consider returning stdout or stderr or both instead of lines or in addition to lines
-			// Add a line in the output with the error message and exit
-			lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
-			return lines, errors.Wrapf(err, "error writing file content to %s", path)
-		}
+		// cat + redirection
+		scriptBlock = fmt.Sprintf("%s\ncat %s %q << END\n%s\nEND\n", scriptBlock, redirects, path, content)
 
 		// if permissions is different by default ownership in kind, sets file permissions
 		if permissions != "0644" {
-			// Add a line in the output that mimics the command being issues at the command line
-			lines = append(lines, fmt.Sprintf("%s chmod %s %s", prompt, permissions, path))
-			// TODO: use Run instead of CombinedOutputLines
-			if _, err := exec.CombinedOutputLines(cmder.Command("chmod", permissions, path)); err != nil {
-				// Add a line in the output with the error message and exit
-				lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
-				return lines, errors.Wrapf(errors.WithStack(err), "error setting permissions for %s", path)
-			}
+			scriptBlock = fmt.Sprintf("%s\nchmod %s %q", scriptBlock, permissions, path)
 		}
 
 		// if ownership is different by default ownership in kind, sets file ownership
 		if owner != "root:root" {
 			// Add a line in the output that mimics the command being issues at the command line
-			lines = append(lines, fmt.Sprintf("%s chown %s %s", prompt, owner, path))
-			// TODO: use Run instead of CombinedOutputLines
-			if _, err := exec.CombinedOutputLines(cmder.Command("chown", owner, path)); err != nil {
-				// Add a line in the output with the error message and exit
-				lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
-				return lines, errors.Wrapf(errors.WithStack(err), "error setting ownership for %s", path)
-			}
+			scriptBlock = fmt.Sprintf("%s\nchown %s %q", scriptBlock, owner, path)
 		}
 	}
-	return lines, nil
+	return scriptBlock, nil
 }
 
 func fixPath(p string) string {

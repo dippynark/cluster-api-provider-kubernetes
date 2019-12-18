@@ -18,9 +18,10 @@ package cloudinit
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
-	"sigs.k8s.io/kind/pkg/exec"
 )
 
 type unknown struct {
@@ -56,6 +57,6 @@ func (u *unknown) Unmarshal(data []byte) error {
 }
 
 // Run will do nothing since the cloud config module is unknown.
-func (u *unknown) Run(_ exec.Cmder) ([]string, error) {
-	return u.lines, nil
+func (u *unknown) GenerateScriptBlock() (string, error) {
+	return fmt.Sprintf("%s\n\n%s", u.module, strings.Join(u.lines, "\n")), nil
 }

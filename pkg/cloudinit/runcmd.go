@@ -23,12 +23,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
-	"sigs.k8s.io/kind/pkg/exec"
-)
-
-const (
-	prompt      = "capd@docker$"
-	errorPrefix = "ERROR!"
 )
 
 // Cmd defines a runcmd command
@@ -84,31 +78,22 @@ func (a *runCmd) Unmarshal(userData []byte) error {
 	return nil
 }
 
-// Run the runCmd
-func (a *runCmd) Run(cmder exec.Cmder) ([]string, error) {
-	var lines []string //nolint:prealloc
+// Generate the runCmd
+func (a *runCmd) GenerateScriptBlock() (string, error) {
+	var scriptBlock string
 	for _, c := range a.Cmds {
 		// kubeadm in docker requires to ignore some errors, and this requires to modify the cmd generate by CABPK by default...
 		c = hackKubeadmIgnoreErrors(c)
 
-		// Add a line in the output that mimics the command being issues at the command line
-		lines = append(lines, fmt.Sprintf("%s %s %s", prompt, c.Cmd, strings.Join(c.Args, " ")))
-
-		// Run the command
-		cmd := cmder.Command(c.Cmd, c.Args...)
-		cmdLines, err := exec.CombinedOutputLines(cmd)
-
-		// Add The output lines received
-		lines = append(lines, cmdLines...)
-
-		// If the command failed
-		if err != nil {
-			// Add a line in the output with the error message and exit
-			lines = append(lines, fmt.Sprintf("%s %v", errorPrefix, err))
-			return lines, errors.Wrapf(errors.WithStack(err), "error running %+v", c)
+		// Append line to block
+		command := fmt.Sprintf("%q", c.Cmd)
+		for _, arg := range c.Args {
+			command = fmt.Sprintf("%s %q", command, arg)
 		}
+		scriptBlock = fmt.Sprintf("%s\n%s", scriptBlock, command)
 	}
-	return lines, nil
+
+	return scriptBlock, nil
 }
 
 func hackKubeadmIgnoreErrors(c Cmd) Cmd {

@@ -20,12 +20,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
+	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
-	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	coreV1Client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
@@ -49,10 +49,37 @@ import (
 )
 
 const (
-	machineControllerName      = "KubernetesMachine-controller"
-	defaultImageName           = "kindest/node"
-	kindContainerName          = "kind"
-	bootstrappedAnnotationName = "infrastructure.lukeaddison.co.uk/bootstrapped"
+	machineControllerName        = "KubernetesMachine-controller"
+	defaultImageName             = "kindest/node"
+	kindContainerName            = "kind"
+	cloudInitBootstrapScriptName = "bootstrap.sh"
+	cloudInitInstallScriptName   = "install.sh"
+	cloudInitInstallScript       = `#!/bin/bash
+
+set -exuo pipefail
+
+until systemctl enable --now cloud-init.path; do
+	sleep 1
+done
+`
+	cloudInitSystemdServiceUnitName = "cloud-init.service"
+	cloudInitSystemdServiceUnit     = `[Unit]
+Description=Cloud-init bootstrap
+After=network.target
+
+[Service]
+ExecStart=/opt/cloud-init/bootstrap.sh
+`
+	cloudInitSystemdPathUnitName = "cloud-init.path"
+	cloudInitSystemdPathUnit     = `[Unit]
+Description=Detect containerd socket creation
+
+[Path]
+PathExists=/var/run/containerd/containerd.sock
+
+[Install]
+WantedBy=multi-user.target
+`
 )
 
 // KubernetesMachineReconciler reconciles a KubernetesMachine object
@@ -69,6 +96,7 @@ type KubernetesMachineReconciler struct {
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create
 
 func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	// TODO: what does ctx do
@@ -174,6 +202,12 @@ func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				ToRequests: handler.ToRequestsFunc(r.PodToKubernetesMachine),
 			},
 		).
+		Watches(
+			&source.Kind{Type: &corev1.Secret{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: handler.ToRequestsFunc(r.SecretToKubernetesMachine),
+			},
+		).
 		Complete(r)
 }
 
@@ -220,7 +254,7 @@ func (r *KubernetesMachineReconciler) PodToKubernetesMachine(o handler.MapObject
 	result := []ctrl.Request{}
 	s, ok := o.Object.(*corev1.Pod)
 	if !ok {
-		r.Log.Error(errors.Errorf("expected a Service but got a %T", o.Object), "failed to get KubernetesMachine for Pod")
+		r.Log.Error(errors.Errorf("expected a Pod but got a %T", o.Object), "failed to get KubernetesMachine for Pod")
 		return nil
 	}
 	log := r.Log.WithValues("Pod", s.Name, "Namespace", s.Namespace)
@@ -237,15 +271,61 @@ func (r *KubernetesMachineReconciler) PodToKubernetesMachine(o handler.MapObject
 	return result
 }
 
+// SecretToKubernetesMachine is a handler.ToRequestsFunc to be used to enqeue
+// requests for reconciliation of KubernetesMachines
+func (r *KubernetesMachineReconciler) SecretToKubernetesMachine(o handler.MapObject) []ctrl.Request {
+	result := []ctrl.Request{}
+	s, ok := o.Object.(*corev1.Secret)
+	if !ok {
+		r.Log.Error(errors.Errorf("expected a Secret but got a %T", o.Object), "failed to get KubernetesMachine for Secret")
+		return nil
+	}
+	log := r.Log.WithValues("Secret", s.Name, "Namespace", s.Namespace)
+
+	// Only watch secrets owned by a kubernetesmachine
+	ref := metav1.GetControllerOf(s)
+	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != infrav1.GroupVersion.String()) {
+		return nil
+	}
+	log.Info(fmt.Sprintf("Found Secret owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
+	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
+	result = append(result, ctrl.Request{NamespacedName: name})
+
+	return result
+}
+
 func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the KubernetesMachine doesn't have finalizer, add it.
 	if !util.Contains(kubernetesMachine.Finalizers, capkv1.MachineFinalizer) {
 		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
 	}
 
-	// Check if machine pod already exists
+	// Make sure bootstrap data is available and populated.
+	if machine.Spec.Bootstrap.Data == nil {
+		r.Log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+		return ctrl.Result{}, nil
+	}
+
+	// Generate cloud-init bootstrap script secret
+	cloudInitScriptSecret, err := r.generatateCloudInitSecret(cluster, machine, kubernetesMachine, machine.Spec.Bootstrap.Data)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Create secret
+	// TODO: check whether secret needs to be updated
+	err = r.Create(context.TODO(), cloudInitScriptSecret)
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return ctrl.Result{}, err
+	}
+	// Ensuresecretis controlled by kubernetes machine
+	if ref := metav1.GetControllerOf(cloudInitScriptSecret); ref == nil || ref.UID != kubernetesMachine.UID {
+		return ctrl.Result{}, errors.Errorf("expected Secret %s in Namespace %s to be controlled by KubernetsMachine %s", cloudInitScriptSecret.Name, cloudInitScriptSecret.Namespace, kubernetesMachine.Name)
+	}
+
+	// Create machine pod
 	machinePod := &corev1.Pod{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{
+	err = r.Client.Get(context.TODO(), types.NamespacedName{
 		Namespace: machine.Namespace,
 		Name:      machinePodName(cluster, machine),
 	}, machinePod)
@@ -255,42 +335,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	// Ensure machine pod is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(machinePod); ref == nil || ref.UID != kubernetesMachine.UID {
 		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", machinePod.Name, machinePod.Namespace, kubernetesMachine.Name)
-	}
-
-	// Check whether machine has already been bootstrapped
-	if bootstrappedAnnotationValue, ok := machinePod.ObjectMeta.Annotations[bootstrappedAnnotationName]; !ok || bootstrappedAnnotationValue != "true" {
-
-		// Check if machine pod is ready
-		if !utils.IsPodReady(machinePod) {
-			r.Log.Info(fmt.Sprintf("Pod %s/%s is not ready", machinePod.Namespace, machinePod.Name))
-			return ctrl.Result{}, nil
-		}
-
-		// Make sure bootstrap data is available and populated.
-		if machine.Spec.Bootstrap.Data == nil {
-			r.Log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-			return ctrl.Result{}, nil
-		}
-
-		// exec bootstrap
-		// NB. this step is necessary to mimic the behaviour of cloud-init that is embedded in the base images
-		// for other cloud providers
-		// TODO: make this asynchronous
-		// TODO: ensure this is not attempted for a worker when no controller exists
-		if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "failed to exec KubernetesMachine bootstrap")
-		}
-
-		// Mark pod as bootstrapped
-		if machinePod.ObjectMeta.Annotations == nil {
-			machinePod.ObjectMeta.Annotations = make(map[string]string)
-		}
-		machinePod.ObjectMeta.Annotations[bootstrappedAnnotationName] = "true"
-		return ctrl.Result{}, r.Client.Update(context.TODO(), machinePod)
 	}
 
 	// If the machine has already been provisioned, return
@@ -302,7 +349,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is no a cloud controller for kubernetes that executes this step
 	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
+		return ctrl.Result{RequeueAfter: time.Second * 5}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
 
 	// Set ProviderID so the Cluster API Machine Controller can pull it
@@ -316,22 +363,40 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) execBootstrap(machinePod *corev1.Pod, data string) error {
+func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, data *string) (*corev1.Secret, error) {
 
-	cloudConfig, err := base64.StdEncoding.DecodeString(data)
+	cloudConfig, err := base64.StdEncoding.DecodeString(*data)
 	if err != nil {
-		return errors.Wrap(err, "failed to decode machine's bootstrap data")
+		return nil, errors.Wrap(err, "failed to decode machine's bootstrap data")
+	}
+	cloudInitScript, err := cloudinit.GenerateScript(cloudConfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate machine's cloudinit bootstrap script")
 	}
 
-	r.Log.Info("Running machine bootstrap scripts")
-	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePod.Name, machinePod.Namespace, "kind")
-	lines, err := cloudinit.Run(cloudConfig, machinePodKindCmder)
-	if err != nil {
-		r.Log.Error(err, strings.Join(lines, "\n"))
-		return errors.Wrap(err, "failed to join node with kubeadm")
+	// Create cloud-init secret
+	cloudInitScriptSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machinePodName(cluster, machine) + "-cloud-init",
+			Namespace: machine.Namespace,
+			Labels: map[string]string{
+				clusterv1.MachineClusterLabelName: cluster.Name,
+			},
+		},
+		StringData: map[string]string{
+			cloudInitBootstrapScriptName:    cloudInitScript,
+			cloudInitInstallScriptName:      cloudInitInstallScript,
+			cloudInitSystemdServiceUnitName: cloudInitSystemdServiceUnit,
+			cloudInitSystemdPathUnitName:    cloudInitSystemdPathUnit,
+		},
 	}
 
-	return nil
+	// TODO: make secret be owned by machine pod?
+	if err := controllerutil.SetControllerReference(kubernetesMachine, cloudInitScriptSecret, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	return cloudInitScriptSecret, nil
 }
 
 func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
@@ -434,6 +499,7 @@ func (r *KubernetesMachineReconciler) kubeadmReset(cluster *clusterv1.Cluster, m
 }
 
 func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+
 	if util.IsControlPlaneMachine(machine) {
 		return r.createControlPlaneMachinePod(cluster, machine, kubernetesMachine)
 	}
@@ -470,6 +536,14 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: pointer.BoolPtr(true),
 					},
+					ReadinessProbe: &corev1.Probe{
+						PeriodSeconds: 3,
+						Handler: corev1.Handler{
+							TCPSocket: &corev1.TCPSocketAction{
+								Port: intstr.FromInt(6443),
+							},
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "lib-modules",
@@ -483,6 +557,27 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 						{
 							Name:      "var-lib-etcd",
 							MountPath: "/var/lib/etcd",
+						},
+						{
+							Name:      "cloud-init-scripts",
+							MountPath: "/opt/cloud-init",
+						},
+						{
+							Name:      "cloud-init-systemd-units",
+							MountPath: "/etc/systemd/system/" + cloudInitSystemdServiceUnitName,
+							SubPath:   cloudInitSystemdServiceUnitName,
+						},
+						{
+							Name:      "cloud-init-systemd-units",
+							MountPath: "/etc/systemd/system/" + cloudInitSystemdPathUnitName,
+							SubPath:   cloudInitSystemdPathUnitName,
+						},
+					},
+					Lifecycle: &corev1.Lifecycle{
+						PostStart: &corev1.Handler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"/opt/cloud-init/" + cloudInitInstallScriptName},
+							},
 						},
 					},
 					Resources: kubernetesMachine.Spec.Resources,
@@ -508,6 +603,43 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 					Name: "var-lib-etcd",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "cloud-init-scripts",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: machinePodName(cluster, machine) + "-cloud-init",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cloudInitBootstrapScriptName,
+									Path: cloudInitBootstrapScriptName,
+								},
+								{
+									Key:  cloudInitInstallScriptName,
+									Path: cloudInitInstallScriptName,
+								},
+							},
+							DefaultMode: pointer.Int32Ptr(0500),
+						},
+					},
+				},
+				{
+					Name: "cloud-init-systemd-units",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: machinePodName(cluster, machine) + "-cloud-init",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cloudInitSystemdServiceUnitName,
+									Path: cloudInitSystemdServiceUnitName,
+								},
+								{
+									Key:  cloudInitSystemdPathUnitName,
+									Path: cloudInitSystemdPathUnitName,
+								},
+							},
+						},
 					},
 				},
 			},
@@ -552,6 +684,27 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 							Name:      "var-lib-containerd",
 							MountPath: "/var/lib/containerd",
 						},
+						{
+							Name:      "cloud-init-scripts",
+							MountPath: "/opt/cloud-init",
+						},
+						{
+							Name:      "cloud-init-systemd-units",
+							MountPath: "/etc/systemd/system/" + cloudInitSystemdServiceUnitName,
+							SubPath:   cloudInitSystemdServiceUnitName,
+						},
+						{
+							Name:      "cloud-init-systemd-units",
+							MountPath: "/etc/systemd/system/" + cloudInitSystemdPathUnitName,
+							SubPath:   cloudInitSystemdPathUnitName,
+						},
+					},
+					Lifecycle: &corev1.Lifecycle{
+						PostStart: &corev1.Handler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"/opt/cloud-init/" + cloudInitInstallScriptName},
+							},
+						},
 					},
 					Resources: kubernetesMachine.Spec.Resources,
 				},
@@ -570,6 +723,43 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 					Name: "var-lib-containerd",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "cloud-init-scripts",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: machinePodName(cluster, machine) + "-cloud-init",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cloudInitBootstrapScriptName,
+									Path: cloudInitBootstrapScriptName,
+								},
+								{
+									Key:  cloudInitInstallScriptName,
+									Path: cloudInitInstallScriptName,
+								},
+							},
+							DefaultMode: pointer.Int32Ptr(0500),
+						},
+					},
+				},
+				{
+					Name: "cloud-init-systemd-units",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: machinePodName(cluster, machine) + "-cloud-init",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cloudInitSystemdServiceUnitName,
+									Path: cloudInitSystemdServiceUnitName,
+								},
+								{
+									Key:  cloudInitSystemdPathUnitName,
+									Path: cloudInitSystemdPathUnitName,
+								},
+							},
+						},
 					},
 				},
 			},

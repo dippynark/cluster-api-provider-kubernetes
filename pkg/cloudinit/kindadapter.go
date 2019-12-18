@@ -19,18 +19,21 @@ package cloudinit
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
-	"sigs.k8s.io/kind/pkg/exec"
 )
 
 const (
 	// Supported cloud config modules
-	writefiles = "write_files"
-	runcmd     = "runcmd"
+	writefiles   = "write_files"
+	runcmd       = "runcmd"
+	scriptHeader = `#!/bin/bash
+
+set -exuo pipefail`
 )
 
 type actionFactory struct{}
@@ -42,40 +45,42 @@ func (a *actionFactory) action(name string) action {
 	case runcmd:
 		return newRunCmdAction()
 	default:
-		// TODO Add a logger during the refactor and log this unknown module
+		// TODO: Add a logger during the refactor and log this unknown module
 		return newUnknown(name)
 	}
 }
 
 type action interface {
 	Unmarshal(userData []byte) error
-	Run(cmder exec.Cmder) ([]string, error)
+	GenerateScriptBlock() (string, error)
 }
 
-// Run the given userData (a cloud config script) on the given node
-func Run(cloudConfig []byte, cmder exec.Cmder) ([]string, error) {
-	// validate cloudConfigScript is a valid yaml, as required by the cloud config specification
+// GenerateScript returns cloudConfig as lines of a shell script
+func GenerateScript(cloudConfig []byte) (string, error) {
+
+	// Validate cloudConfigScript is a valid yaml, as required by the cloud config specification
 	if err := yaml.Unmarshal(cloudConfig, &map[string]interface{}{}); err != nil {
-		return nil, errors.Wrapf(err, "cloud-config is not valid yaml")
+		return "", errors.Wrapf(err, "cloud-config is not valid yaml")
 	}
 
-	// parse the cloud config yaml into a slice of cloud config actions.
+	// Parse the cloud config yaml into a slice of cloud config actions
 	actions, err := getActions(cloudConfig)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	// executes all the actions in order
-	var lines []string //nolint:prealloc
+	// Generates a block for each action
+	script := scriptHeader
 	for _, a := range actions {
-		actionLines, err := a.Run(cmder)
+		scriptBlock, err := a.GenerateScriptBlock()
 		if err != nil {
-			return actionLines, err
+			return script, err
 		}
-		lines = append(lines, actionLines...)
+		script = fmt.Sprintf("%s\n\n%s", script, scriptBlock)
 	}
+	script = script + "\n"
 
-	return lines, nil
+	return script, nil
 }
 
 // getActions parses the cloud config yaml into a slice of actions to run.
