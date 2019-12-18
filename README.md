@@ -224,7 +224,7 @@ EOF
 )
 
 # Retrieve kubeconfig
-until kubectl get secret example-kubeconfig &>/dev/null; do
+until [ -n "`kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' 2>/dev/null`" ] ; do
   sleep 1
 done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
