@@ -10,7 +10,7 @@ serve as Nodes which form a cluster.
 
 We will create the infrastructure to run the Cluster API controllers, install
 the controllers and then configure an example cluster using the Kubernetes
-infrastruture provider.
+infrastructure provider.
 
 ### Infrastructure
 
@@ -223,18 +223,20 @@ spec:
 EOF
 )
 
-# Check that the node pods are being created
-kubectl get pods
-
 # Retrieve kubeconfig
-until kubectl get secret example-kubeconfig 2>/dev/null; do
+until kubectl get secret example-kubeconfig &>/dev/null; do
   sleep 1
 done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
 
+# Wait for controller pod to be running
+until kubectl get pod example-controller | grep Running &>/dev/null; do
+  sleep 1
+done
+
 # Port-forward and override kubeconfig values
 # Note: If the loadbalancer is reachable from your machine there is no need to do this
-kubectl port-forward service/example-lb 6443:$LOADBALANCER_PORT 2>&1 >/dev/null &
+kubectl port-forward service/example-lb 6443:$LOADBALANCER_PORT &>/dev/null &
 kubectl --kubeconfig example-kubeconfig config set-cluster example \
   --server=https://127.0.0.1:6443 --insecure-skip-tls-verify=true
 
@@ -242,7 +244,7 @@ kubectl --kubeconfig example-kubeconfig config set-cluster example \
 export KUBECONFIG=example-kubeconfig
 
 # Wait for the apiserver to come up
-until kubectl get nodes 2>&1 >/dev/null; do
+until kubectl get nodes &>/dev/null; do
   sleep 1
 done
 
