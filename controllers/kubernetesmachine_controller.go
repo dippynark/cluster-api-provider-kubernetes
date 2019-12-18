@@ -284,6 +284,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		}
 
 		// Mark pod as bootstrapped
+		if machinePod.ObjectMeta.Annotations == nil {
+			machinePod.ObjectMeta.Annotations = make(map[string]string)
+		}
 		machinePod.ObjectMeta.Annotations[bootstrappedAnnotationName] = "true"
 		return ctrl.Result{}, r.Client.Update(context.TODO(), machinePod)
 	}
