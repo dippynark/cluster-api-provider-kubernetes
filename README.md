@@ -1,4 +1,4 @@
-# cluster-api-provider-kubernetes
+# Kubernetes Cluster API Provider Kubernetes
 
 This project is a [Cluster API
 Provider](https://cluster-api.sigs.k8s.io/reference/providers.html)
