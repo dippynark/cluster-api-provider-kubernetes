@@ -259,5 +259,6 @@ kubectl get nodes
 # Clean up
 unset KUBECONFIG
 pkill kubectl port-forward service/example-lb 8080:$LOADBALANCER_PORT
+rm example-kubeconfig
 kubectl delete cluster example
 ```
