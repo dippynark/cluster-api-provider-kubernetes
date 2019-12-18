@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: capi-kubernetes
+rules:
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesclusters
+  - kubernetesmachines
+  - kubernetesmachinetemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: capi-kubernetes
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: capi-system
+roleRef:
+  kind: ClusterRole
+  name: capi-kubernetes
+  apiGroup: rbac.authorization.k8s.io
