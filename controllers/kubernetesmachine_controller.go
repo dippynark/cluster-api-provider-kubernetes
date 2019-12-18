@@ -304,7 +304,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Set ProviderID so the Cluster API Machine Controller can pull it
-	providerID := providerID(cluster, machinePod)
+	providerID := providerID(cluster, machine)
 	kubernetesMachine.Spec.ProviderID = &providerID
 
 	// Mark the kubernetesMachine ready
@@ -359,7 +359,7 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 		"--kubeconfig", "/etc/kubernetes/admin.conf",
 		"patch",
 		"node", machinePodName(cluster, machine),
-		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID(cluster, machinePod)))
+		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID(cluster, machine)))
 	machinePodKindCmd.SetStdout(stdout)
 	machinePodKindCmd.SetStderr(stderr)
 
@@ -588,8 +588,8 @@ func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) stri
 	return fmt.Sprintf("%s-%s", cluster.Name, machine.Name)
 }
 
-func providerID(cluster *clusterv1.Cluster, machinePod *corev1.Pod) string {
-	return fmt.Sprintf("kubernetes://%s/%s", cluster.Name, machinePod.Name)
+func providerID(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
+	return fmt.Sprintf("kubernetes://%s/%s/%s", cluster.Namespace, cluster.Name, machine.Name)
 }
 
 func kubeconfigSecretName(cluster *clusterv1.Cluster) string {
