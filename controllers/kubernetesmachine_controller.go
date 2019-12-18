@@ -279,6 +279,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		// exec bootstrap
 		// NB. this step is necessary to mimic the behaviour of cloud-init that is embedded in the base images
 		// for other cloud providers
+		// TODO: make this asynchronous
+		// TODO: ensure this is not attempted for a worker when no controller exists
 		if err := r.execBootstrap(machinePod, *machine.Spec.Bootstrap.Data); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to exec KubernetesMachine bootstrap")
 		}
