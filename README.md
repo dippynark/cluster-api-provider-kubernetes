@@ -10,7 +10,7 @@ serve as Nodes which form a cluster.
 
 We will create the infrastructure to run the Cluster API controllers, install
 the controllers and then configure an example cluster using the Kubernetes
-infrastrucutre provider.
+infrastruture provider.
 
 ### Infrastructure
 
@@ -18,33 +18,37 @@ Any Kubernetes cluster should be suitable, but below are a few examples.
 
 #### kind
 
-```sh
-# install kind: https://github.com/kubernetes-sigs/kind#installation-and-usage
+```bash
+# Install kind: https://github.com/kubernetes-sigs/kind#installation-and-usage
 kind create cluster --name management-cluster
 kind export kubeconfig --name management-cluster
 ```
 
 #### GKE
 
-> WARNING: the following will cost money - consider using the [GCP Free
+> WARNING: using a GKE cluster will cost money - consider using the [GCP Free
 > Tier](https://cloud.google.com/free/)
 
-```sh
+```bash
 gcloud container clusters create management-cluster
 gcloud container clusters get-credentials management-cluster
 ```
 
 ### Installation
 
-```sh
+```bash
 # Install cluster api
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.7/cluster-api-components.yaml
+
 # Install kubeadm bootstrap provider
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
+
 # Install kubernetes infrastructure crds
 make install
+
 # Deploy kubernetes infrastructure provider controller
 make deploy
+
 # Allow cluster api controller to interact with kubernetes infrastructure resources
 kubectl apply -f <(cat <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
@@ -101,9 +105,14 @@ spec:
     name: example
 EOF
 )
-# Wait for loadbalancer to be provisioned and retrieve IP address
+
+# Wait for api endpoint to be provisioned
+until [ -n "`kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0]}'`" ] ; do
+  sleep 1
+done
 LOADBALANCER_HOST=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].host}')
 LOADBALANCER_PORT=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].port}')
+
 # Deploy controller machine
 kubectl apply -f <(cat <<EOF
 kind: KubeadmConfig
@@ -153,6 +162,7 @@ spec:
     name: controller
 EOF
 )
+
 # Deploy worker machine deployment
 kubectl apply -f <(cat <<EOF
 kind: MachineDeployment
@@ -212,20 +222,40 @@ spec:
           memory: 100Mi
 EOF
 )
+
 # Check that the node pods are being created
 kubectl get pods
+
 # Retrieve kubeconfig
+until kubectl get secret example-kubeconfig 2>/dev/null; do
+  sleep 1
+done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
-# If the loadbalancer is reachable there is no need to port-forward or set an alias
-kubectl port-forward service/example-lb 8080:$LOADBALANCER_PORT
-# In a separate terminal
-alias kubectl='kubectl --kubeconfig example-kubeconfig --server https://127.0.0.1:8080 --insecure-skip-tls-verify=true'
-# Install an overlay and cni plugin
+
+# Port-forward and override kubeconfig values
+# Note: If the loadbalancer is reachable from your machine there is no need to do this
+kubectl port-forward service/example-lb 6443:$LOADBALANCER_PORT 2>&1 >/dev/null &
+kubectl --kubeconfig example-kubeconfig config set-cluster example \
+  --server=https://127.0.0.1:6443 --insecure-skip-tls-verify=true
+
+# Switch to example cluster
+export KUBECONFIG=example-kubeconfig
+
+# Wait for the apiserver to come up
+until kubectl get nodes 2>&1 >/dev/null; do
+  sleep 1
+done
+
+# Install a cni solution
 # Note that this needs to align with the configured pod cidr
 # https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
 kubectl apply -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
-# Check that the nodes become ready
+
+# Interact with your new cluster!
 kubectl get nodes
-# Tear down cluster
+
+# Clean up
+unset KUBECONFIG
+pkill kubectl port-forward service/example-lb 8080:$LOADBALANCER_PORT
 kubectl delete cluster example
 ```
