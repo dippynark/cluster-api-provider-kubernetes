@@ -14,7 +14,8 @@ infrastructure provider.
 
 ### Infrastructure
 
-Any Kubernetes cluster should be suitable, but below are a few examples.
+Any recent Kubernetes cluster should be suitable (compatibility matrix to come),
+but below are a few examples.
 
 #### kind
 
