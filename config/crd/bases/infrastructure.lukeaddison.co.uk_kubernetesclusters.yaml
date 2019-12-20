@@ -36,7 +36,7 @@ spec:
         spec:
           description: KubernetesClusterSpec defines the desired state of KubernetesCluster
           properties:
-            serviceType:
+            apiServerServiceType:
               description: Service Type string describes ingress methods for a service
               type: string
           type: object

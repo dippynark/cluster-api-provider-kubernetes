@@ -29,7 +29,7 @@ const (
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
 type KubernetesClusterSpec struct {
 	// +optional
-	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
+	APIServerServiceType corev1.ServiceType `json:"apiServerServiceType,omitempty"`
 }
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster

@@ -43,7 +43,7 @@ import (
 
 const (
 	clusterControllerName   = "KubernetesCluster-controller"
-	kubeAPIServerPortName   = "kube-apiserver"
+	apiServerPortName       = "kube-apiserver"
 	clusterLoadBalancerPort = 443
 )
 
@@ -163,6 +163,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
+		// TODO: reconcile properly by updating service if already existing
 		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
@@ -244,10 +245,10 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 					Name:       "https",
 					Protocol:   "TCP",
 					Port:       clusterLoadBalancerPort,
-					TargetPort: intstr.FromString(kubeAPIServerPortName),
+					TargetPort: intstr.FromString(apiServerPortName),
 				},
 			},
-			Type: kubernetesCluster.Spec.ServiceType,
+			Type: kubernetesCluster.Spec.APIServerServiceType,
 		},
 	}
 	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
