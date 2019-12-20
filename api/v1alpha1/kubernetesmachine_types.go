@@ -31,8 +31,8 @@ type KubernetesMachineSpec struct {
 	// ProviderID will be the pod uid in ProviderID format
 	// (kubernetes:////<poduid>)
 	// +optional
-	ProviderID *string                     `json:"providerID,omitempty"`
-	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	ProviderID     *string `json:"providerID,omitempty"`
+	corev1.PodSpec `json:",inline"`
 }
 
 // KubernetesMachineStatus defines the observed state of KubernetesMachine

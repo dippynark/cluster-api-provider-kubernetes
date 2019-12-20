@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"path"
 	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
@@ -49,12 +50,23 @@ import (
 )
 
 const (
-	machineControllerName        = "KubernetesMachine-controller"
-	defaultImageName             = "kindest/node"
-	kindContainerName            = "kind"
-	cloudInitBootstrapScriptName = "bootstrap.sh"
-	cloudInitInstallScriptName   = "install.sh"
-	cloudInitInstallScript       = `#!/bin/bash
+	machineControllerName           = "KubernetesMachine-controller"
+	defaultImageName                = "kindest/node"
+	kindContainerName               = "kind"
+	apiServerContainerPort          = 6443
+	varLibEtcdVolumeName            = "var-lib-etcd"
+	varLibEtcdVolumeMountPath       = "/var/lib/etcd"
+	libModulesVolumeName            = "lib-modules"
+	libModulesVolumeMountPath       = "/lib/modules"
+	varLibContainerdVolumeName      = "var-lib-containerd"
+	varLibContainerdVolumeMountPath = "/var/lib/containerd"
+	cloudInitScriptsVolumeName      = "cloud-init-scripts"
+	cloudInitScriptsVolumeMountPath = "/opt/cloud-init"
+	cloudInitSystemdUnitsVolume     = "cloud-init-systemd-units"
+	etcSystemdSystem                = "/etc/systemd/system"
+	cloudInitBootstrapScriptName    = "bootstrap.sh"
+	cloudInitInstallScriptName      = "install.sh"
+	cloudInitInstallScript          = `#!/bin/bash
 
 set -exuo pipefail
 
@@ -347,7 +359,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
-	// NB. this step is necessary because there is no a cloud controller for kubernetes that executes this step
+	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
 	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
 		return ctrl.Result{RequeueAfter: time.Second * 5}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
@@ -443,7 +455,7 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 }
 
 func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
-	// if the deleted machine is a control-plane node, exec kubeadm reset so the
+	// If the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
 	if util.IsControlPlaneMachine(machine) {
 		// Check if machine pod exists
@@ -507,7 +519,7 @@ func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluste
 }
 
 func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
-	directory := corev1.HostPathDirectory
+
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machinePodName(cluster, machine),
@@ -517,143 +529,72 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 				clusterv1.MachineControlPlaneLabelName: "true",
 			},
 		},
-		Spec: corev1.PodSpec{
-			DNSPolicy: "None",
-			DNSConfig: &corev1.PodDNSConfig{
-				Nameservers: []string{"8.8.8.8", "8.8.4.4"},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  kindContainerName,
-					Image: machinePodImage(machine),
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          kubeAPIServerPortName,
-							Protocol:      "TCP",
-							ContainerPort: 6443,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						Privileged: pointer.BoolPtr(true),
-					},
-					ReadinessProbe: &corev1.Probe{
-						PeriodSeconds: 3,
-						Handler: corev1.Handler{
-							TCPSocket: &corev1.TCPSocketAction{
-								Port: intstr.FromInt(6443),
-							},
-						},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "lib-modules",
-							MountPath: "/lib/modules",
-							ReadOnly:  true,
-						},
-						{
-							Name:      "var-lib-containerd",
-							MountPath: "/var/lib/containerd",
-						},
-						{
-							Name:      "var-lib-etcd",
-							MountPath: "/var/lib/etcd",
-						},
-						{
-							Name:      "cloud-init-scripts",
-							MountPath: "/opt/cloud-init",
-						},
-						{
-							Name:      "cloud-init-systemd-units",
-							MountPath: "/etc/systemd/system/" + cloudInitSystemdServiceUnitName,
-							SubPath:   cloudInitSystemdServiceUnitName,
-						},
-						{
-							Name:      "cloud-init-systemd-units",
-							MountPath: "/etc/systemd/system/" + cloudInitSystemdPathUnitName,
-							SubPath:   cloudInitSystemdPathUnitName,
-						},
-					},
-					Lifecycle: &corev1.Lifecycle{
-						PostStart: &corev1.Handler{
-							Exec: &corev1.ExecAction{
-								Command: []string{"/opt/cloud-init/" + cloudInitInstallScriptName},
-							},
-						},
-					},
-					Resources: kubernetesMachine.Spec.Resources,
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "lib-modules",
-					VolumeSource: corev1.VolumeSource{
-						HostPath: &corev1.HostPathVolumeSource{
-							Path: "/lib/modules",
-							Type: &directory,
-						},
-					},
-				},
-				{
-					Name: "var-lib-containerd",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-				{
-					Name: "var-lib-etcd",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-				{
-					Name: "cloud-init-scripts",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: machinePodName(cluster, machine) + "-cloud-init",
-							Items: []corev1.KeyToPath{
-								{
-									Key:  cloudInitBootstrapScriptName,
-									Path: cloudInitBootstrapScriptName,
-								},
-								{
-									Key:  cloudInitInstallScriptName,
-									Path: cloudInitInstallScriptName,
-								},
-							},
-							DefaultMode: pointer.Int32Ptr(0500),
-						},
-					},
-				},
-				{
-					Name: "cloud-init-systemd-units",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: machinePodName(cluster, machine) + "-cloud-init",
-							Items: []corev1.KeyToPath{
-								{
-									Key:  cloudInitSystemdServiceUnitName,
-									Path: cloudInitSystemdServiceUnitName,
-								},
-								{
-									Key:  cloudInitSystemdPathUnitName,
-									Path: cloudInitSystemdPathUnitName,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+		Spec: kubernetesMachine.Spec.PodSpec,
 	}
-	if err := controllerutil.SetControllerReference(kubernetesMachine, machinePod, r.Scheme); err != nil {
+
+	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// Set etcd volume
+	varLibEtcdVolumeMissing := true
+	for _, volume := range machinePod.Spec.Volumes {
+		if volume.Name == varLibEtcdVolumeName {
+			varLibEtcdVolumeMissing = false
+			break
+		}
+	}
+	if varLibEtcdVolumeMissing {
+		varLibEtcdVolume := corev1.Volume{
+			Name: varLibEtcdVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibEtcdVolume)
+	}
+
+	// Set kind container
+	kindContainer := setKindContainerBase(machine, machinePod)
+
+	// Set readiness probe
+	// TODO: create proper https readiness check
+	if kindContainer.ReadinessProbe == nil {
+		kindContainer.ReadinessProbe = &corev1.Probe{
+			PeriodSeconds: 3,
+			Handler: corev1.Handler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(6443),
+				},
+			},
+		}
+	}
+
+	// Set etcd volume mount
+	setVolumeMount(kindContainer, varLibEtcdVolumeName, varLibEtcdVolumeMountPath, "", false)
+
+	// Set apiserver container port
+	apiServerContainerPortMissing := true
+	for _, containerPort := range kindContainer.Ports {
+		if containerPort.Name == apiServerPortName {
+			apiServerContainerPortMissing = false
+		}
+	}
+	if apiServerContainerPortMissing {
+		apiServerContainerPort := corev1.ContainerPort{
+			Name:          apiServerPortName,
+			Protocol:      corev1.ProtocolTCP,
+			ContainerPort: apiServerContainerPort,
+		}
+		kindContainer.Ports = append(kindContainer.Ports, apiServerContainerPort)
 	}
 
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
 func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
-	directory := corev1.HostPathDirectory
+
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machinePodName(cluster, machine),
@@ -662,114 +603,196 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 				clusterv1.MachineClusterLabelName: cluster.Name,
 			},
 		},
-		Spec: corev1.PodSpec{
-			DNSPolicy: "None",
-			DNSConfig: &corev1.PodDNSConfig{
-				Nameservers: []string{"8.8.8.8", "8.8.4.4"},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  kindContainerName,
-					Image: machinePodImage(machine),
-					SecurityContext: &corev1.SecurityContext{
-						Privileged: pointer.BoolPtr(true),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "lib-modules",
-							MountPath: "/lib/modules",
-							ReadOnly:  true,
-						},
-						{
-							Name:      "var-lib-containerd",
-							MountPath: "/var/lib/containerd",
-						},
-						{
-							Name:      "cloud-init-scripts",
-							MountPath: "/opt/cloud-init",
-						},
-						{
-							Name:      "cloud-init-systemd-units",
-							MountPath: "/etc/systemd/system/" + cloudInitSystemdServiceUnitName,
-							SubPath:   cloudInitSystemdServiceUnitName,
-						},
-						{
-							Name:      "cloud-init-systemd-units",
-							MountPath: "/etc/systemd/system/" + cloudInitSystemdPathUnitName,
-							SubPath:   cloudInitSystemdPathUnitName,
-						},
-					},
-					Lifecycle: &corev1.Lifecycle{
-						PostStart: &corev1.Handler{
-							Exec: &corev1.ExecAction{
-								Command: []string{"/opt/cloud-init/" + cloudInitInstallScriptName},
-							},
-						},
-					},
-					Resources: kubernetesMachine.Spec.Resources,
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "lib-modules",
-					VolumeSource: corev1.VolumeSource{
-						HostPath: &corev1.HostPathVolumeSource{
-							Path: "/lib/modules",
-							Type: &directory,
-						},
-					},
-				},
-				{
-					Name: "var-lib-containerd",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-				{
-					Name: "cloud-init-scripts",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: machinePodName(cluster, machine) + "-cloud-init",
-							Items: []corev1.KeyToPath{
-								{
-									Key:  cloudInitBootstrapScriptName,
-									Path: cloudInitBootstrapScriptName,
-								},
-								{
-									Key:  cloudInitInstallScriptName,
-									Path: cloudInitInstallScriptName,
-								},
-							},
-							DefaultMode: pointer.Int32Ptr(0500),
-						},
-					},
-				},
-				{
-					Name: "cloud-init-systemd-units",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: machinePodName(cluster, machine) + "-cloud-init",
-							Items: []corev1.KeyToPath{
-								{
-									Key:  cloudInitSystemdServiceUnitName,
-									Path: cloudInitSystemdServiceUnitName,
-								},
-								{
-									Key:  cloudInitSystemdPathUnitName,
-									Path: cloudInitSystemdPathUnitName,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+		Spec: kubernetesMachine.Spec.PodSpec,
 	}
-	if err := controllerutil.SetControllerReference(kubernetesMachine, machinePod, r.Scheme); err != nil {
+
+	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Set kind container
+	setKindContainerBase(machine, machinePod)
+
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
+}
+
+func (r *KubernetesMachineReconciler) setMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine, machinePod *corev1.Pod) error {
+
+	// Set dns policy
+	if machinePod.Spec.DNSPolicy == "" && machinePod.Spec.DNSConfig == nil {
+		machinePod.Spec.DNSPolicy = corev1.DNSNone
+		// TODO: don't use Google's nameservers
+		machinePod.Spec.DNSConfig = &corev1.PodDNSConfig{
+			Nameservers: []string{"8.8.8.8", "8.8.4.4"},
+		}
+	}
+
+	// Set volumes
+	libModulesVolumeMissing := true
+	varLibContainerdVolumeMissing := true
+	cloudInitScriptsVolumeMissing := true
+	cloudInitSystemdUnitsVolumeMissing := true
+	for _, volume := range machinePod.Spec.Volumes {
+		if volume.Name == libModulesVolumeName {
+			libModulesVolumeMissing = false
+		}
+		if volume.Name == varLibContainerdVolumeName {
+			varLibContainerdVolumeMissing = false
+		}
+		if volume.Name == cloudInitScriptsVolumeName {
+			cloudInitScriptsVolumeMissing = false
+		}
+		if volume.Name == cloudInitSystemdUnitsVolume {
+			cloudInitSystemdUnitsVolumeMissing = false
+		}
+	}
+	if libModulesVolumeMissing {
+		directory := corev1.HostPathDirectory
+		libModulesVolume := corev1.Volume{
+			Name: libModulesVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: libModulesVolumeMountPath,
+					Type: &directory,
+				},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, libModulesVolume)
+	}
+	if varLibContainerdVolumeMissing {
+		varLibContainerdVolume := corev1.Volume{
+			Name: varLibContainerdVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibContainerdVolume)
+	}
+	if cloudInitScriptsVolumeMissing {
+		cloudInitScriptsVolume := corev1.Volume{
+			Name: cloudInitScriptsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: machinePodName(cluster, machine) + "-cloud-init",
+					Items: []corev1.KeyToPath{
+						{
+							Key:  cloudInitBootstrapScriptName,
+							Path: cloudInitBootstrapScriptName,
+						},
+						{
+							Key:  cloudInitInstallScriptName,
+							Path: cloudInitInstallScriptName,
+						},
+					},
+					DefaultMode: pointer.Int32Ptr(0500),
+				},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, cloudInitScriptsVolume)
+	}
+	if cloudInitSystemdUnitsVolumeMissing {
+		cloudInitSystemdUnitsVolume := corev1.Volume{
+			Name: cloudInitSystemdUnitsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: machinePodName(cluster, machine) + "-cloud-init",
+					Items: []corev1.KeyToPath{
+						{
+							Key:  cloudInitSystemdServiceUnitName,
+							Path: cloudInitSystemdServiceUnitName,
+						},
+						{
+							Key:  cloudInitSystemdPathUnitName,
+							Path: cloudInitSystemdPathUnitName,
+						},
+					},
+				},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, cloudInitSystemdUnitsVolume)
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(kubernetesMachine, machinePod, r.Scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *corev1.Container {
+
+	// Find kind container
+	var kindContainer *corev1.Container
+	index := -1
+	for index, container := range machinePod.Spec.Containers {
+		if container.Name == kindContainerName {
+			kindContainer = &machinePod.Spec.Containers[index]
+		}
+	}
+	if kindContainer == nil {
+		machinePod.Spec.Containers = append(machinePod.Spec.Containers, corev1.Container{})
+		kindContainer = &machinePod.Spec.Containers[index+1]
+	}
+
+	// Set name
+	kindContainer.Name = kindContainerName
+
+	// Set image
+	if kindContainer.Image == "" {
+		kindContainer.Image = machinePodImage(machine)
+	}
+
+	// Set privileged
+	if kindContainer.SecurityContext == nil {
+		kindContainer.SecurityContext = &corev1.SecurityContext{}
+	}
+	if kindContainer.SecurityContext.Privileged == nil {
+		kindContainer.SecurityContext.Privileged = pointer.BoolPtr(true)
+	}
+
+	// Set lifecycle hook
+	if kindContainer.Lifecycle == nil {
+		kindContainer.Lifecycle = &corev1.Lifecycle{}
+	}
+	if kindContainer.Lifecycle.PostStart == nil {
+		kindContainer.Lifecycle.PostStart = &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{path.Join(cloudInitScriptsVolumeMountPath, cloudInitInstallScriptName)},
+			},
+		}
+	}
+
+	// Set volume mounts
+	setVolumeMount(kindContainer, libModulesVolumeName, libModulesVolumeMountPath, "", true)
+	setVolumeMount(kindContainer, varLibContainerdVolumeName, varLibContainerdVolumeMountPath, "", false)
+	setVolumeMount(kindContainer, cloudInitScriptsVolumeName, cloudInitScriptsVolumeMountPath, "", false)
+	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdServiceUnitName), cloudInitSystemdServiceUnitName, false)
+	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
+
+	return kindContainer
+}
+
+func setVolumeMount(kindContainer *corev1.Container, name, mountPath, subPath string, readOnly bool) {
+	volumeMountPathMissing := true
+	for _, volumeMount := range kindContainer.VolumeMounts {
+		// Only create mount point if unused elsewhere
+		if volumeMount.MountPath == mountPath {
+			volumeMountPathMissing = false
+			break
+		}
+	}
+	if volumeMountPathMissing {
+		volumeMount := corev1.VolumeMount{
+			Name:      name,
+			MountPath: mountPath,
+			ReadOnly:  readOnly,
+			SubPath:   subPath,
+		}
+		kindContainer.VolumeMounts = append(kindContainer.VolumeMounts, volumeMount)
+	}
+
 }
 
 func machinePodImage(machine *clusterv1.Machine) string {
