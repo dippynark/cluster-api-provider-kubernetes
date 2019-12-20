@@ -4108,8 +4108,7 @@ spec:
                         pod priority will be default or zero if there is no default.
                       type: string
                     providerID:
-                      description: ProviderID will be the pod uid in ProviderID format
-                        (kubernetes:////<poduid>)
+                      description: ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`
                       type: string
                     readinessGates:
                       description: 'If specified, all readiness gates will be evaluated

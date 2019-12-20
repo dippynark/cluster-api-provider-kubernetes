@@ -28,8 +28,7 @@ const (
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
-	// ProviderID will be the pod uid in ProviderID format
-	// (kubernetes:////<poduid>)
+	// ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`
 	// +optional
 	ProviderID     *string `json:"providerID,omitempty"`
 	corev1.PodSpec `json:",inline"`
