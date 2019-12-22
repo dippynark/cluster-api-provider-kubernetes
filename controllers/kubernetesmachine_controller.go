@@ -25,6 +25,7 @@ import (
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
+	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -362,6 +363,12 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 
+	// Check machine is ready before execing
+	if !utils.IsPodReady(machinePod) {
+		r.Log.Info("Waiting for machine Pod to be ready")
+		return ctrl.Result{}, nil
+	}
+
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
 	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
@@ -479,7 +486,6 @@ func (r *KubernetesMachineReconciler) kubeadmReset(cluster *clusterv1.Cluster, m
 }
 
 func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
-
 	if util.IsControlPlaneMachine(machine) {
 		return r.createControlPlaneMachinePod(cluster, machine, kubernetesMachine)
 	}
@@ -497,7 +503,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 				clusterv1.MachineControlPlaneLabelName: "true",
 			},
 		},
-		Spec: kubernetesMachine.Spec.PodSpec,
+		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
 	}
 
 	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)
@@ -577,7 +583,7 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 				clusterv1.MachineClusterLabelName: cluster.Name,
 			},
 		},
-		Spec: kubernetesMachine.Spec.PodSpec,
+		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
 	}
 
 	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)

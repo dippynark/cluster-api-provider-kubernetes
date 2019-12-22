@@ -23,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
+// TODO: prune unknown fields
+
 var (
 	// GroupVersion is group version used to register these objects
 	GroupVersion = schema.GroupVersion{Group: "infrastructure.lukeaddison.co.uk", Version: "v1alpha1"}

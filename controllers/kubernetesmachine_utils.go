@@ -80,7 +80,7 @@ func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *infrav1.K
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 					ClaimName: claim.Name,
-					// TODO: Use source definition to set this value when we have one.
+					// TODO: Use source definition to set this value when we have one
 					ReadOnly: false,
 				},
 			},
