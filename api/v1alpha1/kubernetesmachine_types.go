@@ -32,6 +32,8 @@ type KubernetesMachineSpec struct {
 	// +optional
 	ProviderID     *string `json:"providerID,omitempty"`
 	corev1.PodSpec `json:",inline"`
+	// +optional
+	VolumeClaimTemplates []corev1.PersistentVolumeClaim `json:"volumeClaimTemplates,omitempty"`
 }
 
 // KubernetesMachineStatus defines the observed state of KubernetesMachine

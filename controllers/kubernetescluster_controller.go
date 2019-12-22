@@ -163,12 +163,12 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		// TODO: reconcile properly by updating service if already existing
 		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	// TODO: Check ports and service type, update if necessary
 
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {

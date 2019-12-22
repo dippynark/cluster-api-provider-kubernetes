@@ -18,13 +18,12 @@ package controllers
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"path"
 	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
-	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
+	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -45,8 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 )
 
 const (
@@ -330,9 +327,16 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return ctrl.Result{}, err
 	}
-	// Ensuresecretis controlled by kubernetes machine
+	// Ensure secret is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(cloudInitScriptSecret); ref == nil || ref.UID != kubernetesMachine.UID {
 		return ctrl.Result{}, errors.Errorf("expected Secret %s in Namespace %s to be controlled by KubernetsMachine %s", cloudInitScriptSecret.Name, cloudInitScriptSecret.Namespace, kubernetesMachine.Name)
+	}
+
+	// Create persistent volume claims
+	// TODO: clean up pvcs if they are removed from the list of templates
+	err = r.createPersistentVolumeClaims(kubernetesMachine)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create persistent volume claims")
 	}
 
 	// Create machine pod
@@ -375,40 +379,35 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, data *string) (*corev1.Secret, error) {
-
-	cloudConfig, err := base64.StdEncoding.DecodeString(*data)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode machine's bootstrap data")
-	}
-	cloudInitScript, err := cloudinit.GenerateScript(cloudConfig)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate machine's cloudinit bootstrap script")
-	}
-
-	// Create cloud-init secret
-	cloudInitScriptSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePodName(cluster, machine) + "-cloud-init",
+func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+	// If the deleted machine is a control-plane node, exec kubeadm reset so the
+	// etcd member hosted on the machine gets removed in a controlled way
+	if util.IsControlPlaneMachine(machine) {
+		// Check if machine pod exists
+		machinePod := &corev1.Pod{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{
 			Namespace: machine.Namespace,
-			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: cluster.Name,
-			},
-		},
-		StringData: map[string]string{
-			cloudInitBootstrapScriptName:    cloudInitScript,
-			cloudInitInstallScriptName:      cloudInitInstallScript,
-			cloudInitSystemdServiceUnitName: cloudInitSystemdServiceUnit,
-			cloudInitSystemdPathUnitName:    cloudInitSystemdPathUnit,
-		},
+			Name:      machinePodName(cluster, machine),
+		}, machinePod)
+		// Check we found a pod...
+		if !k8serrors.IsNotFound(err) {
+			// ...and we didn't encounter another error
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// Ensure machine pod is controlled by kubernetes machine
+			if ref := metav1.GetControllerOf(machinePod); ref != nil && ref.UID == kubernetesMachine.UID {
+				if err := r.kubeadmReset(cluster, machine); err != nil {
+					return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
+				}
+			}
+		}
 	}
 
-	// TODO: make secret be owned by machine pod?
-	if err := controllerutil.SetControllerReference(kubernetesMachine, cloudInitScriptSecret, r.Scheme); err != nil {
-		return nil, err
-	}
+	// Machine is deleted so remove the finalizer.
+	kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
 
-	return cloudInitScriptSecret, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
@@ -452,37 +451,6 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 	r.Log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePod.Name, machinePod.Namespace, stdout.String()))
 
 	return nil
-}
-
-func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
-	// If the deleted machine is a control-plane node, exec kubeadm reset so the
-	// etcd member hosted on the machine gets removed in a controlled way
-	if util.IsControlPlaneMachine(machine) {
-		// Check if machine pod exists
-		machinePod := &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: machine.Namespace,
-			Name:      machinePodName(cluster, machine),
-		}, machinePod)
-		// Check we found a pod...
-		if !k8serrors.IsNotFound(err) {
-			// ...and we didn't encounter another error
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			// Ensure machine pod is controlled by kubernetes machine
-			if ref := metav1.GetControllerOf(machinePod); ref != nil && ref.UID == kubernetesMachine.UID {
-				if err := r.kubeadmReset(cluster, machine); err != nil {
-					return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
-				}
-			}
-		}
-	}
-
-	// Machine is deleted so remove the finalizer.
-	kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
-
-	return ctrl.Result{}, nil
 }
 
 // kubeadmReset will run `kubeadm reset` on the machine
@@ -553,6 +521,12 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			},
 		}
 		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibEtcdVolume)
+	}
+
+	// Set persistent volume claims
+	err = r.updateStorage(kubernetesMachine, machinePod)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Set kind container
@@ -772,41 +746,4 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
 
 	return kindContainer
-}
-
-func setVolumeMount(kindContainer *corev1.Container, name, mountPath, subPath string, readOnly bool) {
-	volumeMountPathMissing := true
-	for _, volumeMount := range kindContainer.VolumeMounts {
-		// Only create mount point if unused elsewhere
-		if volumeMount.MountPath == mountPath {
-			volumeMountPathMissing = false
-			break
-		}
-	}
-	if volumeMountPathMissing {
-		volumeMount := corev1.VolumeMount{
-			Name:      name,
-			MountPath: mountPath,
-			ReadOnly:  readOnly,
-			SubPath:   subPath,
-		}
-		kindContainer.VolumeMounts = append(kindContainer.VolumeMounts, volumeMount)
-	}
-
-}
-
-func machinePodImage(machine *clusterv1.Machine) string {
-	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
-}
-
-func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
-	return fmt.Sprintf("%s-%s", cluster.Name, machine.Name)
-}
-
-func providerID(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
-	return fmt.Sprintf("kubernetes://%s/%s/%s", cluster.Namespace, cluster.Name, machine.Name)
-}
-
-func kubeconfigSecretName(cluster *clusterv1.Cluster) string {
-	return fmt.Sprintf("%s-kubeconfig", cluster.Name)
 }
