@@ -593,6 +593,12 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 		return ctrl.Result{}, err
 	}
 
+	// Set persistent volume claims
+	err = r.updateStorage(kubernetesMachine, machinePod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Set kind container
 	setKindContainerBase(machine, machinePod)
 
