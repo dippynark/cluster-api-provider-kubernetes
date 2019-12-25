@@ -66,7 +66,9 @@ const (
 	cloudInitInstallScriptName      = "install.sh"
 	cloudInitInstallScript          = `#!/bin/bash
 
-set -exuo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
 
 until systemctl enable --now cloud-init.path; do
 	sleep 1

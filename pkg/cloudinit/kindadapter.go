@@ -33,7 +33,9 @@ const (
 	runcmd       = "runcmd"
 	scriptHeader = `#!/bin/bash
 
-set -exuo pipefail`
+set -o errexit
+set -o nounset
+set -o pipefail`
 )
 
 type actionFactory struct{}
