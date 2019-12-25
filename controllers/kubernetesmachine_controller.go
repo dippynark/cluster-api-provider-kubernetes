@@ -109,6 +109,7 @@ type KubernetesMachineReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create
 
 func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	// TODO: what does ctx do
@@ -220,6 +221,12 @@ func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				ToRequests: handler.ToRequestsFunc(r.SecretToKubernetesMachine),
 			},
 		).
+		Watches(
+			&source.Kind{Type: &corev1.PersistentVolumeClaim{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: handler.ToRequestsFunc(r.PersistentVolumeClaimToKubernetesMachine),
+			},
+		).
 		Complete(r)
 }
 
@@ -300,6 +307,29 @@ func (r *KubernetesMachineReconciler) SecretToKubernetesMachine(o handler.MapObj
 		return nil
 	}
 	log.Info(fmt.Sprintf("Found Secret owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
+	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
+	result = append(result, ctrl.Request{NamespacedName: name})
+
+	return result
+}
+
+// PersistentVolumeClaimToKubernetesMachine is a handler.ToRequestsFunc to be used to enqeue
+// requests for reconciliation of KubernetesMachines
+func (r *KubernetesMachineReconciler) PersistentVolumeClaimToKubernetesMachine(o handler.MapObject) []ctrl.Request {
+	result := []ctrl.Request{}
+	s, ok := o.Object.(*corev1.PersistentVolumeClaim)
+	if !ok {
+		r.Log.Error(errors.Errorf("expected a PersistentVolumeClaim but got a %T", o.Object), "failed to get KubernetesMachine for Secret")
+		return nil
+	}
+	log := r.Log.WithValues("PersistentVolumeClaim", s.Name, "Namespace", s.Namespace)
+
+	// Only watch persistentvolumeclaim owned by a kubernetesmachine
+	ref := metav1.GetControllerOf(s)
+	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != infrav1.GroupVersion.String()) {
+		return nil
+	}
+	log.Info(fmt.Sprintf("Found PersistentVolumeClaim owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
 	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
 	result = append(result, ctrl.Request{NamespacedName: name})
 
