@@ -505,6 +505,8 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 				clusterv1.MachineControlPlaneLabelName: "true",
 			},
 		},
+		// TODO: work out why using `kubernetesMachine.Spec.PodSpec` causes
+		// updates to the kubernetesMachine resource
 		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
 	}
 
@@ -610,7 +612,7 @@ func (r *KubernetesMachineReconciler) setMachinePodBase(cluster *clusterv1.Clust
 	// Set dns policy
 	if machinePod.Spec.DNSPolicy == "" && machinePod.Spec.DNSConfig == nil {
 		machinePod.Spec.DNSPolicy = corev1.DNSNone
-		// TODO: don't use Google's nameservers
+		// TODO: don't use Google's nameservers by default
 		machinePod.Spec.DNSConfig = &corev1.PodDNSConfig{
 			Nameservers: []string{"8.8.8.8", "8.8.4.4"},
 		}
