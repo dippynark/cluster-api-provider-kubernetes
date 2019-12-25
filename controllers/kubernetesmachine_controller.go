@@ -547,7 +547,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			PeriodSeconds: 3,
 			Handler: corev1.Handler{
 				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(6443),
+					Port: intstr.FromInt(apiServerContainerPort),
 				},
 			},
 		}
