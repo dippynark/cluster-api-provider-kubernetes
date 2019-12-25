@@ -14,26 +14,9 @@ infrastructure provider.
 
 ### Infrastructure
 
-Any recent Kubernetes cluster should be suitable (compatibility matrix to come),
-but below are a few examples.
-
-#### kind
-
-```bash
-# Install kind: https://github.com/kubernetes-sigs/kind#installation-and-usage
-kind create cluster --name management-cluster
-kind export kubeconfig --name management-cluster
-```
-
-#### GKE
-
-> WARNING: using a GKE cluster will cost money - consider using the [GCP Free
-> Tier](https://cloud.google.com/free/)
-
-```bash
-gcloud container clusters create management-cluster
-gcloud container clusters get-credentials management-cluster
-```
+Any recent Kubernetes cluster should be suitable (compatibility matrix to come).
+The manifests below assume we are running on a cluster that supports
+[LoadBalancer Service] types and [dynamic volume provisioning].
 
 ### Installation
 
@@ -45,12 +28,12 @@ kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/downloa
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
 
 # Install kubernetes infrastructure provider
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.2.1/provider-components.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.0/provider-components.yaml
 
 # Allow cluster api controller to interact with kubernetes infrastructure resources
 # If the kubernetes provider were SIG-sponsored this would not be necesarry ;)
 # https://cluster-api.sigs.k8s.io/providers/v1alpha1-to-v1alpha2.html#the-new-api-groups
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.2.1/capi-kubernetes-rbac.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.0/capi-kubernetes-rbac.yaml
 ```
 
 ### Configuration
@@ -62,8 +45,9 @@ kind: KubernetesCluster
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: example
-spec: {}
-#  serviceType: LoadBalancer # uncomment on clusters that support loadbalancers
+spec:
+  # Change or remove for clusters that do not support LoadBalancer Service types
+  apiServerServiceType: LoadBalancer
 ---
 kind: Cluster
 apiVersion: cluster.x-k8s.io/v1alpha2
@@ -114,10 +98,44 @@ apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: controller
 spec:
-  resources:
-    requests:
-      cpu: 200m
-      memory: 200Mi
+  containers:
+  - name: kind
+    resources:
+      requests:
+        cpu: 200m
+        memory: 200Mi
+    volumeMounts:
+    - name: etc-kubernetes
+      mountPath: /etc/kubernetes
+    - name: var-lib-kubelet
+      mountPath: /var/lib/kubelet
+    - name: var-lib-etcd
+      mountPath: /var/lib/etcd
+  volumeClaimTemplates:
+  - metadata:
+      name: etc-kubernetes
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: var-lib-kubelet
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: var-lib-etcd
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
 ---
 kind: Machine
 apiVersion: cluster.x-k8s.io/v1alpha2
@@ -142,6 +160,56 @@ EOF
 
 # Deploy worker machine deployment
 kubectl apply -f <(cat <<EOF
+kind: KubernetesMachineTemplate
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
+metadata:
+  name: worker
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        volumeMounts:
+        - name: etc-kubernetes
+          mountPath: /etc/kubernetes
+        - name: var-lib-kubelet
+          mountPath: /var/lib/kubelet
+      volumeClaimTemplates:
+      - metadata:
+          name: etc-kubernetes
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+      - metadata:
+          name: var-lib-kubelet
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+kind: KubeadmConfigTemplate
+metadata:
+  name: worker
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+            cgroups-per-qos: "false"
+            enforce-node-allocatable: ""
+---
 kind: MachineDeployment
 apiVersion: cluster.x-k8s.io/v1alpha2
 metadata:
@@ -150,7 +218,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: example
     nodepool: default
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: example
@@ -171,32 +239,6 @@ spec:
         kind: KubernetesMachineTemplate
         apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
         name: worker
----
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-kind: KubeadmConfigTemplate
-metadata:
-  name: worker
-spec:
-  template:
-    spec:
-      joinConfiguration:
-        nodeRegistration:
-          kubeletExtraArgs:
-            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-            cgroups-per-qos: "false"
-            enforce-node-allocatable: ""
----
-kind: KubernetesMachineTemplate
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
-metadata:
-  name: worker
-spec:
-  template:
-    spec:
-      resources:
-        requests:
-          cpu: 100m
-          memory: 100Mi
 EOF
 )
 
@@ -206,21 +248,12 @@ until [ -n "`kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' 2
 done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
 
-# Wait for controller pod to be running
-until kubectl get pod example-controller | grep Running &>/dev/null; do
-  sleep 1
-done
-
-# Port-forward and override kubeconfig values
-# Note: If the loadbalancer is reachable from your machine there is no need to do this
-kubectl port-forward service/example-lb 6443:$LOADBALANCER_PORT &>/dev/null &
-kubectl --kubeconfig example-kubeconfig config set-cluster example \
-  --server=https://127.0.0.1:6443 --insecure-skip-tls-verify=true
-
 # Switch to example cluster
 export KUBECONFIG=example-kubeconfig
 
 # Wait for the apiserver to come up
+# If the example-lb Service is not reachable from your machine consider
+# port-forwarding to it
 until kubectl get nodes &>/dev/null; do
   sleep 1
 done
@@ -235,7 +268,9 @@ kubectl get nodes
 
 # Clean up
 unset KUBECONFIG
-pkill kubectl port-forward service/example-lb 8080:$LOADBALANCER_PORT
 rm example-kubeconfig
 kubectl delete cluster example
 ```
+
+[dynamic volume provisioning]: https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/
+[LoadBalancer Service]: https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
