@@ -1,22 +1,22 @@
 # Kubernetes Cluster API Provider Kubernetes
 
-This project is a [Cluster API
-Provider](https://cluster-api.sigs.k8s.io/reference/providers.html)
-implementation using Kubernetes as the infrastructure provider. Pods running
-[kind](https://github.com/kubernetes-sigs/kind) are created and configured to
-serve as Nodes which form a cluster.
+The [Cluster API] brings declarative, Kubernetes-style APIs to cluster creation,
+configuration and management.
+
+This project is a [Cluster API Infrastructure Provider] implementation using
+Kubernetes itself as the infrastructure provider. Pods running [kind] are
+created and configured to serve as Nodes which form a cluster.
 
 ## Quickstart
 
-We will create the infrastructure to run the Cluster API controllers, install
-the controllers and then configure an example cluster using the Kubernetes
-infrastructure provider.
+We will install the Cluster API controllers and configure an example cluster
+using the Kubernetes infrastructure provider.
 
 ### Infrastructure
 
 Any recent Kubernetes cluster should be suitable (compatibility matrix to come).
-The manifests below assume we are running on a cluster that supports
-[LoadBalancer Service] types and [dynamic volume provisioning].
+The manifests below assume we are using a cluster that supports [LoadBalancer
+Service] types, although they can be adapted for clusters that do not.
 
 ### Installation
 
@@ -97,45 +97,6 @@ kind: KubernetesMachine
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: controller
-spec:
-  containers:
-  - name: kind
-    resources:
-      requests:
-        cpu: 200m
-        memory: 200Mi
-    volumeMounts:
-    - name: etc-kubernetes
-      mountPath: /etc/kubernetes
-    - name: var-lib-kubelet
-      mountPath: /var/lib/kubelet
-    - name: var-lib-etcd
-      mountPath: /var/lib/etcd
-  volumeClaimTemplates:
-  - metadata:
-      name: etc-kubernetes
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-  - metadata:
-      name: var-lib-kubelet
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-  - metadata:
-      name: var-lib-etcd
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 10Gi
 ---
 kind: Machine
 apiVersion: cluster.x-k8s.io/v1alpha2
@@ -166,35 +127,7 @@ metadata:
   name: worker
 spec:
   template:
-    spec:
-      containers:
-      - name: kind
-        resources:
-          requests:
-            cpu: 100m
-            memory: 100Mi
-        volumeMounts:
-        - name: etc-kubernetes
-          mountPath: /etc/kubernetes
-        - name: var-lib-kubelet
-          mountPath: /var/lib/kubelet
-      volumeClaimTemplates:
-      - metadata:
-          name: etc-kubernetes
-        spec:
-          accessModes:
-          - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-      - metadata:
-          name: var-lib-kubelet
-        spec:
-          accessModes:
-          - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
+    spec: {}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
 kind: KubeadmConfigTemplate
@@ -252,8 +185,7 @@ kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --dec
 export KUBECONFIG=example-kubeconfig
 
 # Wait for the apiserver to come up
-# If the example-lb Service is not reachable from your machine consider
-# port-forwarding to it
+# If the example-lb Service is not reachable from your machine consider port-forwarding to it
 until kubectl get nodes &>/dev/null; do
   sleep 1
 done
@@ -272,5 +204,7 @@ rm example-kubeconfig
 kubectl delete cluster example
 ```
 
-[dynamic volume provisioning]: https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/
+[Cluster API]: https://github.com/kubernetes-sigs/cluster-api
+[Cluster API Infrastructure Provider]: https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure
+[kind]: https://github.com/kubernetes-sigs/kind
 [LoadBalancer Service]: https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
