@@ -22,7 +22,7 @@ Service] types, although they can be adapted for clusters that do not.
 
 ```bash
 # Install cluster api
-kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.7/cluster-api-components.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.8/cluster-api-components.yaml
 
 # Install kubeadm bootstrap provider
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
