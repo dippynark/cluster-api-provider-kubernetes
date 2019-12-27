@@ -24,6 +24,10 @@ const (
 	// MachineFinalizer allows ReconcileKubernetesMachine to clean up resources
 	// associated with KubernetesMachine before removing it from the apiserver.
 	MachineFinalizer = "kubernetesmachine.infrastructure.lukeaddison.co.uk"
+
+	// MachineVersionAnnotation allows ReconcileKubernetesMachine to determine
+	// the version of a machine Pod
+	MachineVersionAnnotation = "kubernetesmachine.infrastructure.lukeaddison.co.uk/machine-version"
 )
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine

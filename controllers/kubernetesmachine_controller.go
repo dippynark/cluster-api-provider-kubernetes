@@ -50,6 +50,7 @@ import (
 const (
 	machineControllerName           = "KubernetesMachine-controller"
 	defaultImageName                = "kindest/node"
+	defaultImageTag                 = "v1.16.3"
 	kindContainerName               = "kind"
 	apiServerContainerPort          = 6443
 	varLibEtcdVolumeName            = "var-lib-etcd"
@@ -389,8 +390,14 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", machinePod.Name, machinePod.Namespace, kubernetesMachine.Name)
 	}
 
+	// Check version matches
+	if machineVersion, ok := machinePod.Annotations[infrav1.MachineVersionAnnotation]; !ok || machineVersion != machinePodVersion(machine) {
+		// TODO: drain node first?
+		return ctrl.Result{}, r.Delete(context.TODO(), machinePod)
+	}
+
 	// If the machine has already been provisioned, return
-	// TODO: this shouldn't change, but should we set it just in case?
+	// TODO: this shouldn't change, but should we set it again just in case?
 	if kubernetesMachine.Spec.ProviderID != nil {
 		return ctrl.Result{}, nil
 	}
@@ -526,24 +533,16 @@ func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluste
 
 func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
 
-	machinePod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePodName(cluster, machine),
-			Namespace: machine.Namespace,
-			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName:      cluster.Name,
-				clusterv1.MachineControlPlaneLabelName: "true",
-			},
-		},
-		// TODO: work out why using `kubernetesMachine.Spec.PodSpec` causes
-		// updates to the kubernetesMachine resource
-		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
-	}
-
-	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)
+	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Set control plane label
+	if machinePod.Labels == nil {
+		machinePod.Labels = map[string]string{}
+	}
+	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = "true"
 
 	// Set etcd volume
 	varLibEtcdVolumeMissing := true
@@ -609,18 +608,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 
 func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
 
-	machinePod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePodName(cluster, machine),
-			Namespace: machine.Namespace,
-			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: cluster.Name,
-			},
-		},
-		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
-	}
-
-	err := r.setMachinePodBase(cluster, machine, kubernetesMachine, machinePod)
+	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -637,7 +625,23 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
-func (r *KubernetesMachineReconciler) setMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine, machinePod *corev1.Pod) error {
+func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (*corev1.Pod, error) {
+
+	machinePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machinePodName(cluster, machine),
+			Namespace: machine.Namespace,
+			Labels: map[string]string{
+				clusterv1.MachineClusterLabelName: cluster.Name,
+			},
+			Annotations: map[string]string{
+				infrav1.MachineVersionAnnotation: machinePodVersion(machine),
+			},
+		},
+		// TODO: work out why using `kubernetesMachine.Spec.PodSpec` causes
+		// updates to the kubernetesMachine resource
+		Spec: *kubernetesMachine.Spec.PodSpec.DeepCopy(),
+	}
 
 	// Set dns policy
 	if machinePod.Spec.DNSPolicy == "" && machinePod.Spec.DNSConfig == nil {
@@ -735,10 +739,10 @@ func (r *KubernetesMachineReconciler) setMachinePodBase(cluster *clusterv1.Clust
 
 	// Set controller reference
 	if err := controllerutil.SetControllerReference(kubernetesMachine, machinePod, r.Scheme); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return machinePod, nil
 }
 
 func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *corev1.Container {
@@ -760,6 +764,8 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 	kindContainer.Name = kindContainerName
 
 	// Set image
+	// TODO: make this smarter by concatenating custom base image with machine
+	// semantic version
 	if kindContainer.Image == "" {
 		kindContainer.Image = machinePodImage(machine)
 	}

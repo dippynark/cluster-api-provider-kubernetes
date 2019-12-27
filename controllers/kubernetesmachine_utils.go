@@ -153,7 +153,14 @@ func setVolumeMount(kindContainer *corev1.Container, name, mountPath, subPath st
 }
 
 func machinePodImage(machine *clusterv1.Machine) string {
-	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
+	return fmt.Sprintf("%s:%s", defaultImageName, machinePodVersion(machine))
+}
+
+func machinePodVersion(machine *clusterv1.Machine) string {
+	if machine.Spec.Version == nil {
+		return defaultImageTag
+	}
+	return *machine.Spec.Version
 }
 
 func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
