@@ -15,8 +15,9 @@ using the Kubernetes infrastructure provider.
 ### Infrastructure
 
 Any recent Kubernetes cluster should be suitable (compatibility matrix to come).
-The manifests below assume we are using a cluster that supports [LoadBalancer
-Service] types, although they can be adapted for clusters that do not.
+The following manifests assume we are using a cluster that supports
+[LoadBalancer Service] types, although they can be adapted for clusters that do
+not.
 
 ### Installation
 
