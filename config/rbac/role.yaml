@@ -7,6 +7,22 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machines
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - persistentvolumeclaims
@@ -21,6 +37,7 @@ rules:
   - pods
   verbs:
   - create
+  - delete
   - get
   - list
   - update
@@ -46,22 +63,6 @@ rules:
   verbs:
   - create
   - delete
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - clusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - machines
-  verbs:
   - get
   - list
   - watch
