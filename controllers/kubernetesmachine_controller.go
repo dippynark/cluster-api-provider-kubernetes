@@ -52,7 +52,7 @@ const (
 	defaultImageName                = "kindest/node"
 	defaultImageTag                 = "v1.16.3"
 	kindContainerName               = "kind"
-	apiServerContainerPort          = 6443
+	defaultAPIServerPort            = 6443
 	varLibEtcdVolumeName            = "var-lib-etcd"
 	varLibEtcdVolumeMountPath       = "/var/lib/etcd"
 	libModulesVolumeName            = "lib-modules"
@@ -578,7 +578,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			PeriodSeconds: 3,
 			Handler: corev1.Handler{
 				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(apiServerContainerPort),
+					Port: intstr.FromInt(int(apiServerPort(cluster))),
 				},
 			},
 		}
@@ -598,7 +598,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 		apiServerContainerPort := corev1.ContainerPort{
 			Name:          apiServerPortName,
 			Protocol:      corev1.ProtocolTCP,
-			ContainerPort: apiServerContainerPort,
+			ContainerPort: apiServerPort(cluster),
 		}
 		kindContainer.Ports = append(kindContainer.Ports, apiServerContainerPort)
 	}

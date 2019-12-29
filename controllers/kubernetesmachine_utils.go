@@ -152,6 +152,15 @@ func setVolumeMount(kindContainer *corev1.Container, name, mountPath, subPath st
 
 }
 
+func apiServerPort(cluster *clusterv1.Cluster) int32 {
+	// TODO: kubeadm bootstrap provider currently does not take APIServerPort
+	// into account - should we ignore this too?
+	if cluster.Spec.ClusterNetwork != nil && cluster.Spec.ClusterNetwork.APIServerPort != nil {
+		return *cluster.Spec.ClusterNetwork.APIServerPort
+	}
+	return defaultAPIServerPort
+}
+
 func machinePodImage(machine *clusterv1.Machine) string {
 	return fmt.Sprintf("%s:%s", defaultImageName, machinePodVersion(machine))
 }
