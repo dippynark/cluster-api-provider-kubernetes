@@ -6,11 +6,13 @@ Since a KubernetesMachine resource exposes the full Pod spec, PersistentVolumes
 can be used in the same way as for other Kubernetes workloads to persist data.
 
 Additionally, in the same way as [StatefulSets], KubernetesMachines support
-`volumeClaimTemplates` to dynamically provision PersistentVolumeClaims. The main
-difference here compared with StatefulSets is that the resulting
-PersistentVolumeClaims are [owned] by the KubernetesMachine; this means that
-they will be deleted should the KubernetesMachine be deleted. If you do not want
-this behaviour make sure to provision the necessary PersistentVolumes manually.
+`volumeClaimTemplates` to dynamically provision PersistentVolumeClaims which
+then bind to an available PersistentVolume or trigger a PersistentVolume
+provisioner. The main difference here compared with StatefulSets is that the
+resulting PersistentVolumeClaims are [owned] by the KubernetesMachine; this
+means that they will be deleted should the KubernetesMachine be deleted. If you
+do not want this behaviour make sure to manually specify the list of volumes to
+mount.
 
 The following manifest creates a KubernetesMachine controller that stores etcd
 data as well as data created during the kubeadm bootstrap phase on dynamically
