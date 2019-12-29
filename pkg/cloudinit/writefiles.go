@@ -55,7 +55,7 @@ func (a *writeFilesAction) Unmarshal(userData []byte) error {
 }
 
 func (a *writeFilesAction) GenerateScriptBlock() (string, error) {
-	var scriptBlock string
+	scriptBlock := fmt.Sprintf("# %s script block", writefiles)
 	for _, f := range a.Files {
 		// Fix attributes and apply defaults
 		path := fixPath(f.Path) //NB. the real cloud init module for writes files converts path into absolute paths; this is not possible here...
@@ -77,7 +77,11 @@ func (a *writeFilesAction) GenerateScriptBlock() (string, error) {
 		}
 
 		// cat + redirection
-		scriptBlock = fmt.Sprintf("%s\ncat %s %q << END\n%s\nEND\n", scriptBlock, redirects, path, content)
+		if strings.HasSuffix(content, "\n") {
+			scriptBlock = fmt.Sprintf("%s\ncat %s %q << END\n%sEND", scriptBlock, redirects, path, content)
+		} else {
+			scriptBlock = fmt.Sprintf("%s\ncat %s %q << END\n%s\nEND", scriptBlock, redirects, path, content)
+		}
 
 		// if permissions is different by default ownership in kind, sets file permissions
 		if permissions != "0644" {

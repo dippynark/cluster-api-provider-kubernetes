@@ -80,7 +80,7 @@ func (a *runCmd) Unmarshal(userData []byte) error {
 
 // Generate the runCmd
 func (a *runCmd) GenerateScriptBlock() (string, error) {
-	var scriptBlock string
+	scriptBlock := fmt.Sprintf("# %s script block", runcmd)
 	for _, c := range a.Cmds {
 		// kubeadm in docker requires to ignore some errors, and this requires to modify the cmd generate by CABPK by default...
 		c = hackKubeadmIgnoreErrors(c)
