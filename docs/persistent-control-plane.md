@@ -10,39 +10,14 @@ Additionally, in the same way as [StatefulSets], KubernetesMachines support
 difference here compared with StatefulSets is that the resulting
 PersistentVolumeClaims are [owned] by the KubernetesMachine; this means that
 they will be deleted should the KubernetesMachine be deleted. If you do not want
-this behaviour make sure to provision and mount the necessary PersistentVolumes
-manually.
+this behaviour make sure to provision the necessary PersistentVolumes manually.
 
-The following manifests assume we are running on a cluster that supports
-[dynamic volume provisioning].
+The following manifest creates a KubernetesMachine controller that stores etcd
+data as well as data created during the kubeadm bootstrap phase on dynamically
+provisioned PersistentVolumes. It assumes we are running on a cluster that
+supports [dynamic volume provisioning].
 
-```sh
-# Wait for api endpoint to be provisioned
-until [ -n "`kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0]}'`" ] ; do
-  sleep 1
-done
-LOADBALANCER_HOST=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].host}')
-LOADBALANCER_PORT=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].port}')
-
-# Deploy persistent controller machine
-kubectl apply -f <(cat <<EOF
-kind: KubeadmConfig
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-metadata:
-  name: controller
-spec:
-  initConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-        cgroups-per-qos: "false"
-        enforce-node-allocatable: ""
-  clusterConfiguration:
-    controlPlaneEndpoint: "${LOADBALANCER_HOST}:${LOADBALANCER_PORT}"
-    controllerManager:
-      extraArgs:
-        enable-hostpath-provisioner: "true"
----
+```yaml
 kind: KubernetesMachine
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
@@ -82,27 +57,6 @@ spec:
       resources:
         requests:
           storage: 10Gi
----
-kind: Machine
-apiVersion: cluster.x-k8s.io/v1alpha2
-metadata:
-  name: controller
-  labels:
-    cluster.x-k8s.io/cluster-name: example
-    cluster.x-k8s.io/control-plane: "true"
-spec:
-  version: "v1.16.3"
-  bootstrap:
-    configRef:
-      kind: KubeadmConfig
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-      name: controller
-  infrastructureRef:
-    kind: KubernetesMachine
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
-    name: controller
-EOF
-)
 ```
 
 [StatefulSets]: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/
