@@ -186,7 +186,8 @@ kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --dec
 export KUBECONFIG=example-kubeconfig
 
 # Wait for the apiserver to come up
-# If the example-lb Service is not reachable from your machine consider port-forwarding to it
+# If the cluster api endpoint is not reachable from your machine consider
+# port-forwarding to the example-lb Service and connecting to localhost
 until kubectl get nodes &>/dev/null; do
   sleep 1
 done
