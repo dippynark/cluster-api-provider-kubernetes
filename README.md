@@ -107,7 +107,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: example
     cluster.x-k8s.io/control-plane: "true"
 spec:
-  version: "v1.16.3"
+  version: "v1.14.2"
   bootstrap:
     configRef:
       kind: KubeadmConfig
@@ -163,7 +163,7 @@ spec:
         cluster.x-k8s.io/cluster-name: example
         nodepool: default
     spec:
-      version: "v1.16.3"
+      version: "v1.14.2"
       bootstrap:
         configRef:
           kind: KubeadmConfigTemplate
