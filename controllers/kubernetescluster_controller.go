@@ -168,11 +168,16 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	// TODO: Check ports and service type, update if necessary
 
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
 		return ctrl.Result{}, errors.Errorf("expected Service %s in Namespace %s to be controlled by KubernetesCluster %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+	}
+
+	// TODO: Check labels, ports and selector, update if necessary
+	if clusterService.Spec.Type != kubernetesCluster.Spec.APIServerServiceType {
+		clusterService.Spec.Type = kubernetesCluster.Spec.APIServerServiceType
+		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
 	// Update api endpoints
