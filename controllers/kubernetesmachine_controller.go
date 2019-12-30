@@ -651,9 +651,9 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	// Set dns policy
 	if machinePod.Spec.DNSPolicy == "" && machinePod.Spec.DNSConfig == nil {
 		machinePod.Spec.DNSPolicy = corev1.DNSNone
-		// TODO: don't use Google's nameservers by default
+		// TODO: don't use Cloudflare's nameservers by default
 		machinePod.Spec.DNSConfig = &corev1.PodDNSConfig{
-			Nameservers: []string{"8.8.8.8", "8.8.4.4"},
+			Nameservers: []string{"1.1.1.1", "1.0.0.1"},
 		}
 	}
 
