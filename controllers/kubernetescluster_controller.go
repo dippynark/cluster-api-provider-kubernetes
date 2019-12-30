@@ -238,7 +238,7 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
 				clusterv1.MachineClusterLabelName:      cluster.Name,
-				clusterv1.MachineControlPlaneLabelName: "",
+				clusterv1.MachineControlPlaneLabelName: "true",
 			},
 			Ports: []corev1.ServicePort{
 				{

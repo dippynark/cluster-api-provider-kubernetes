@@ -466,7 +466,7 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 	// Find controller pod
 	labels := map[string]string{
 		clusterv1.MachineClusterLabelName:      cluster.Name,
-		clusterv1.MachineControlPlaneLabelName: "",
+		clusterv1.MachineControlPlaneLabelName: "true",
 	}
 	podList := &corev1.PodList{}
 	if err := r.Client.List(context.TODO(), podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
@@ -547,7 +547,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	if machinePod.Labels == nil {
 		machinePod.Labels = map[string]string{}
 	}
-	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = ""
+	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = "true"
 
 	// Set persistent volume claims
 	err = r.updateStorage(kubernetesMachine, machinePod)
