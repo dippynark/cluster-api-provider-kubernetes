@@ -162,14 +162,10 @@ func apiServerPort(cluster *clusterv1.Cluster) int32 {
 }
 
 func machinePodImage(machine *clusterv1.Machine) string {
-	return fmt.Sprintf("%s:%s", defaultImageName, machinePodVersion(machine))
-}
-
-func machinePodVersion(machine *clusterv1.Machine) string {
 	if machine.Spec.Version == nil {
-		return defaultImageTag
+		return fmt.Sprintf("%s:%s", defaultImageName, defaultImageTag)
 	}
-	return *machine.Spec.Version
+	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
 }
 
 func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {

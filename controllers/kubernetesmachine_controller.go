@@ -395,12 +395,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, errors.Errorf("expected Pod %s in Namespace %s to be controlled by KubernetsMachine %s", machinePod.Name, machinePod.Namespace, kubernetesMachine.Name)
 	}
 
-	// Check version matches
-	if machineVersion, ok := machinePod.Annotations[infrav1.MachineVersionAnnotation]; !ok || machineVersion != machinePodVersion(machine) {
-		// TODO: drain node first?
-		return ctrl.Result{}, r.Delete(context.TODO(), machinePod)
-	}
-
 	// If the machine has already been provisioned, return
 	// TODO: this shouldn't change, but should we set it again just in case?
 	if kubernetesMachine.Spec.ProviderID != nil {
@@ -617,9 +611,6 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 			Namespace: machine.Namespace,
 			Labels: map[string]string{
 				clusterv1.MachineClusterLabelName: cluster.Name,
-			},
-			Annotations: map[string]string{
-				infrav1.MachineVersionAnnotation: machinePodVersion(machine),
 			},
 		},
 		// TODO: work out why using `kubernetesMachine.Spec.PodSpec` causes
