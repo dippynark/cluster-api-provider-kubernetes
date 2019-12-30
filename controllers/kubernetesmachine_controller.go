@@ -51,7 +51,7 @@ import (
 const (
 	machineControllerName           = "KubernetesMachine-controller"
 	defaultImageName                = "kindest/node"
-	defaultImageTag                 = "v1.16.3"
+	defaultImageTag                 = "v1.17.0"
 	kindContainerName               = "kind"
 	defaultAPIServerPort            = 6443
 	varLibEtcdVolumeName            = "var-lib-etcd"
