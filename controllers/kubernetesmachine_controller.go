@@ -54,16 +54,16 @@ const (
 	defaultImageTag                 = "v1.17.0"
 	kindContainerName               = "kind"
 	defaultAPIServerPort            = 6443
-	varLibEtcdVolumeName            = "var-lib-etcd"
-	varLibEtcdVolumeMountPath       = "/var/lib/etcd"
 	libModulesVolumeName            = "lib-modules"
 	libModulesVolumeMountPath       = "/lib/modules"
 	runVolumeName                   = "run"
 	runVolumeMountPath              = "/run"
 	tmpVolumeName                   = "tmp"
 	tmpVolumeMountPath              = "/tmp"
-	varLibContainerdVolumeName      = "var-lib-containerd"
-	varLibContainerdVolumeMountPath = "/var/lib/containerd"
+	varLibVolumeName                = "var-lib"
+	varLibVolumeMountPath           = "/var/lib"
+	varLogVolumeName                = "var-log"
+	varLogVolumeMountPath           = "/var/log"
 	cloudInitScriptsVolumeName      = "cloud-init-scripts"
 	cloudInitScriptsVolumeMountPath = "/opt/cloud-init"
 	cloudInitSystemdUnitsVolume     = "cloud-init-systemd-units"
@@ -549,24 +549,6 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	}
 	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = ""
 
-	// Set etcd volume
-	varLibEtcdVolumeMissing := true
-	for _, volume := range machinePod.Spec.Volumes {
-		if volume.Name == varLibEtcdVolumeName {
-			varLibEtcdVolumeMissing = false
-			break
-		}
-	}
-	if varLibEtcdVolumeMissing {
-		varLibEtcdVolume := corev1.Volume{
-			Name: varLibEtcdVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		}
-		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibEtcdVolume)
-	}
-
 	// Set persistent volume claims
 	err = r.updateStorage(kubernetesMachine, machinePod)
 	if err != nil {
@@ -588,9 +570,6 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 			},
 		}
 	}
-
-	// Set etcd volume mount
-	setVolumeMount(kindContainer, varLibEtcdVolumeName, varLibEtcdVolumeMountPath, "", false)
 
 	// Set apiserver container port
 	apiServerContainerPortMissing := true
@@ -661,7 +640,8 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	tmpVolumeMissing := true
 	runVolumeMissing := true
 	libModulesVolumeMissing := true
-	varLibContainerdVolumeMissing := true
+	varLibVolumeMissing := true
+	varLogVolumeMissing := true
 	cloudInitScriptsVolumeMissing := true
 	cloudInitSystemdUnitsVolumeMissing := true
 	for _, volume := range machinePod.Spec.Volumes {
@@ -674,8 +654,11 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 		if volume.Name == libModulesVolumeName {
 			libModulesVolumeMissing = false
 		}
-		if volume.Name == varLibContainerdVolumeName {
-			varLibContainerdVolumeMissing = false
+		if volume.Name == varLibVolumeName {
+			varLibVolumeMissing = false
+		}
+		if volume.Name == varLogVolumeName {
+			varLogVolumeMissing = false
 		}
 		if volume.Name == cloudInitScriptsVolumeName {
 			cloudInitScriptsVolumeMissing = false
@@ -719,14 +702,23 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 		}
 		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, libModulesVolume)
 	}
-	if varLibContainerdVolumeMissing {
-		varLibContainerdVolume := corev1.Volume{
-			Name: varLibContainerdVolumeName,
+	if varLibVolumeMissing {
+		varLibVolume := corev1.Volume{
+			Name: varLibVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		}
-		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibContainerdVolume)
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibVolume)
+	}
+	if varLogVolumeMissing {
+		varLogVolume := corev1.Volume{
+			Name: varLogVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLogVolume)
 	}
 	if cloudInitScriptsVolumeMissing {
 		cloudInitScriptsVolume := corev1.Volume{
@@ -840,7 +832,8 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 	setVolumeMount(kindContainer, tmpVolumeName, tmpVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, runVolumeName, runVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, libModulesVolumeName, libModulesVolumeMountPath, "", true)
-	setVolumeMount(kindContainer, varLibContainerdVolumeName, varLibContainerdVolumeMountPath, "", false)
+	setVolumeMount(kindContainer, varLibVolumeName, varLibVolumeMountPath, "", false)
+	setVolumeMount(kindContainer, varLogVolumeName, varLogVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, cloudInitScriptsVolumeName, cloudInitScriptsVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdServiceUnitName), cloudInitSystemdServiceUnitName, false)
 	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
