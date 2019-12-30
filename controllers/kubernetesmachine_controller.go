@@ -807,6 +807,7 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 
 	// Ensure machine pod is not best effort
 	// https://github.com/rancher/k3s/issues/1164#issuecomment-564301272
+	// TODO: remove this when bug is fixed
 	if utils.GetPodQOS(machinePod) == corev1.PodQOSBestEffort {
 		kindContainer.Resources = corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
