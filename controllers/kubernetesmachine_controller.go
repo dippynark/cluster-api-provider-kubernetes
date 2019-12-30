@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -802,6 +803,16 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 	// semantic version
 	if kindContainer.Image == "" {
 		kindContainer.Image = machinePodImage(machine)
+	}
+
+	// Ensure machine pod is not best effort
+	// https://github.com/rancher/k3s/issues/1164#issuecomment-564301272
+	if utils.GetPodQOS(machinePod) == corev1.PodQOSBestEffort {
+		kindContainer.Resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU: *resource.NewMilliQuantity(1, resource.DecimalSI),
+			},
+		}
 	}
 
 	// Set privileged
