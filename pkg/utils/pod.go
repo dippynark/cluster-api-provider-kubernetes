@@ -6,6 +6,17 @@ import (
 
 // Copied from https://github.com/kubernetes/kubernetes/blob/40df9f82d0572a123f5ad13f48312978a2ff5877/pkg/api/v1/pod/util.go#L257-L296
 
+// GetContainerStatus extracts the status of container "name" from "statuses".
+// It also returns if "name" exists.
+func GetContainerStatus(statuses []v1.ContainerStatus, name string) (v1.ContainerStatus, bool) {
+	for i := range statuses {
+		if statuses[i].Name == name {
+			return statuses[i], true
+		}
+	}
+	return v1.ContainerStatus{}, false
+}
+
 // IsPodReady returns true if a pod is ready; false otherwise.
 func IsPodReady(pod *v1.Pod) bool {
 	return IsPodReadyConditionTrue(pod.Status)

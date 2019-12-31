@@ -23,6 +23,7 @@ func (r *KubernetesMachineReconciler) getPersistentVolumeClaims(kubernetesMachin
 		claim := templates[i]
 		claim.Name = getPersistentVolumeClaimName(kubernetesMachine, &claim)
 		claim.Namespace = kubernetesMachine.Namespace
+		// TODO: make pvs be owned by the cluster? or the kubeadmControlPlane?
 		if err := controllerutil.SetControllerReference(kubernetesMachine, &claim, r.Scheme); err != nil {
 			return claims, err
 		}
@@ -60,6 +61,7 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 			errs = append(errs, fmt.Errorf("failed to retrieve PVC %s: %s", claim.Name, err))
 		}
 		// TODO: Check resource requirements and accessmodes, update if necessary
+		// TODO: check pvc is owned by kubernetesMachine
 	}
 	return errorutils.NewAggregate(errs)
 }
