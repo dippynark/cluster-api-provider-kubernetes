@@ -438,6 +438,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Check status of kind container
 	kindContainerStatus, exists := utils.GetContainerStatus(machinePod.Status.ContainerStatuses, kindContainerName)
 	if !exists {
+		r.Log.Info("Waiting for kind container status")
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Terminated != nil {
