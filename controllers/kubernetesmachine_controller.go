@@ -376,7 +376,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 			// We rely on a higher level object for recreation
 			kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
 			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-			kubernetesMachine.Status.SetFailureMessage(errors.New("KubernetesMachine cannot be found"))
+			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
 			return ctrl.Result{}, nil
 		}
 		return r.createMachinePod(cluster, machine, kubernetesMachine)
