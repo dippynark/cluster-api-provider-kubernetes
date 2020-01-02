@@ -48,7 +48,7 @@ type APIEndpoint struct {
 	Host string `json:"host"`
 
 	// Port is the port on which the API server is serving.
-	Port int `json:"port"`
+	Port int32 `json:"port"`
 }
 
 // +kubebuilder:object:root=true

@@ -48,6 +48,7 @@ spec:
                   type: string
                 port:
                   description: Port is the port on which the API server is serving.
+                  format: int32
                   type: integer
               required:
               - host
