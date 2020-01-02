@@ -68,13 +68,6 @@ spec:
 EOF
 )
 
-# Wait for api endpoint to be provisioned
-until [ -n "`kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0]}'`" ] ; do
-  sleep 1
-done
-LOADBALANCER_HOST=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].host}')
-LOADBALANCER_PORT=$(kubectl get cluster example -o jsonpath='{.status.apiEndpoints[0].port}')
-
 # Deploy controller machine
 kubectl apply -f <(cat <<EOF
 kind: KubeadmConfig
@@ -89,7 +82,6 @@ spec:
         cgroups-per-qos: "false"
         enforce-node-allocatable: ""
   clusterConfiguration:
-    controlPlaneEndpoint: "${LOADBALANCER_HOST}:${LOADBALANCER_PORT}"
     controllerManager:
       extraArgs:
         enable-hostpath-provisioner: "true"
