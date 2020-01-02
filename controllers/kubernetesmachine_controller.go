@@ -368,8 +368,10 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      machinePodName(cluster, machine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		if kubernetesMachine.Status.Phase != nil {
-			// TODO: machine pod was previous created so something has deleted it
+		// TODO: is recreating the Pod until the providerID is set the right
+		// behaviour?
+		if kubernetesMachine.Spec.ProviderID != nil {
+			// Machine pod was previous created so something has deleted it
 			// This could be due to the Node it was running on failing (for example)
 			// We rely on a higher level object for recreation
 			kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
