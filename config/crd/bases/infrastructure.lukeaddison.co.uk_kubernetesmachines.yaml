@@ -5590,7 +5590,7 @@ spec:
               type: string
             phase:
               description: Phase represents the current phase of kubernetesMachine
-                actuation. E.g. Provisioning, Running, Terminating, Failed etc.
+                actuation. E.g. Provisioning, Running, Failed, Terminated etc.
               type: string
             ready:
               description: Ready denotes that the machine (kubernetes pod) is ready

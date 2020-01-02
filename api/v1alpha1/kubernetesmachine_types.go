@@ -46,7 +46,7 @@ type KubernetesMachineStatus struct {
 	Ready bool `json:"ready"`
 
 	// Phase represents the current phase of kubernetesMachine actuation.
-	// E.g. Provisioning, Running, Terminating, Failed etc.
+	// E.g. Provisioning, Running, Failed, Terminated etc.
 	// +optional
 	Phase *KubernetesMachinePhase `json:"phase,omitempty"`
 
