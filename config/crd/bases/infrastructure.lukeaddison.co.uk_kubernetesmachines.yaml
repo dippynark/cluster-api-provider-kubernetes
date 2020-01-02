@@ -6,6 +6,23 @@ metadata:
   creationTimestamp: null
   name: kubernetesmachines.infrastructure.lukeaddison.co.uk
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.providerID
+    description: Provider ID
+    name: provider-id
+    type: string
+  - JSONPath: .status.phase
+    description: KubernetesMachine status such as Provisioning/Running/Failed/Terminated
+      etc
+    name: phase
+    type: string
+  - JSONPath: .status.podName
+    description: The name of the Pod corresponding to the KubernetesMachine
+    name: pod-name
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: age
+    type: date
   group: infrastructure.lukeaddison.co.uk
   names:
     categories:
@@ -5591,6 +5608,9 @@ spec:
             phase:
               description: Phase represents the current phase of kubernetesMachine
                 actuation. E.g. Provisioning, Running, Failed, Terminated etc.
+              type: string
+            podName:
+              description: PodName is the name of the Pod corresponding to the KubernetesMachine
               type: string
             ready:
               description: Ready denotes that the machine (kubernetes pod) is ready

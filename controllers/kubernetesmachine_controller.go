@@ -368,9 +368,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      machinePodName(cluster, machine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		// TODO: is recreating the Pod until the providerID is set the right
-		// behaviour?
-		if kubernetesMachine.Spec.ProviderID != nil {
+		// TODO: should we use the existence of the providerID instead?
+		// this would require changes to when/how we set podName in the status
+		if kubernetesMachine.Status.GetPhase() != infrav1.KubernetesMachinePhaseUnknown {
 			// Machine pod was previous created so something has deleted it
 			// This could be due to the Node it was running on failing (for example)
 			// We rely on a higher level object for recreation
@@ -393,9 +393,10 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 
-	// Machine Pod has been created so update KubernetesMachine phase
-	if kubernetesMachine.Status.Phase == nil {
+	// Machine Pod has been created so update KubernetesMachine phase and podName
+	if kubernetesMachine.Status.GetPhase() == infrav1.KubernetesMachinePhaseUnknown {
 		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseProvisioning)
+		kubernetesMachine.Status.SetPodName(machinePod.Name)
 		return ctrl.Result{}, nil
 	}
 

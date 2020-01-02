@@ -29,6 +29,7 @@ const (
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
 type KubernetesClusterSpec struct {
 	// +optional
+	// +kubebuilder:default="ClusterIP"
 	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
@@ -60,6 +61,10 @@ type APIEndpoint struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
+// +kubebuilder:printcolumn:name="control-plane-service-type",type="string",JSONPath=".spec.controlPlaneServiceType",description="Service type used for the control plane load balancer"
+// +kubebuilder:printcolumn:name="host",type="string",JSONPath=".spec.controlPlaneEndpoint.host",description="Endpoint host for reaching the control plane"
+// +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".spec.controlPlaneEndpoint.port",description="Endpoint port for reaching the control plane"
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // KubernetesCluster is the Schema for the kubernetesclusters API
 type KubernetesCluster struct {

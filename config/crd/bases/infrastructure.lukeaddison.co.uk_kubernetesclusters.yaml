@@ -6,6 +6,22 @@ metadata:
   creationTimestamp: null
   name: kubernetesclusters.infrastructure.lukeaddison.co.uk
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.controlPlaneServiceType
+    description: Service type used for the control plane load balancer
+    name: control-plane-service-type
+    type: string
+  - JSONPath: .spec.controlPlaneEndpoint.host
+    description: Endpoint host for reaching the control plane
+    name: host
+    type: string
+  - JSONPath: .spec.controlPlaneEndpoint.port
+    description: Endpoint port for reaching the control plane
+    name: port
+    type: integer
+  - JSONPath: .metadata.creationTimestamp
+    name: age
+    type: date
   group: infrastructure.lukeaddison.co.uk
   names:
     categories:
