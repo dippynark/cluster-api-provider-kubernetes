@@ -41,6 +41,11 @@ type KubernetesClusterStatus struct {
 	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
 	// +optional
 	Ready bool `json:"ready"`
+
+	// APIEndpoints represents the endpoints to communicate with the control
+	// plane.
+	// +optional
+	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
 }
 
 // APIEndpoint represents a reachable Kubernetes API endpoint.

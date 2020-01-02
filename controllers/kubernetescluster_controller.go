@@ -199,6 +199,12 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		}
 		host = loadBalancerHost
 	}
+	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
+		{
+			Host: host,
+			Port: clusterLoadBalancerPort,
+		},
+	}
 	kubernetesCluster.Spec.ControlPlaneEndpoint = infrav1.APIEndpoint{
 		Host: host,
 		Port: clusterLoadBalancerPort,
