@@ -29,12 +29,12 @@ kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/downloa
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
 
 # Install kubernetes infrastructure provider
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.3/provider-components.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.4/provider-components.yaml
 
 # Allow cluster api controller to interact with kubernetes infrastructure resources
 # If the kubernetes provider were SIG-sponsored this would not be necesarry ;)
 # https://cluster-api.sigs.k8s.io/providers/v1alpha1-to-v1alpha2.html#the-new-api-groups
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.3/capi-kubernetes-rbac.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.1.4/capi-kubernetes-rbac.yaml
 ```
 
 ### Configuration
