@@ -211,19 +211,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 }
 
 func (r *KubernetesClusterReconciler) reconcileDelete(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
-	// Delete load balancer service
-	clusterService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterServiceName(cluster),
-			Namespace: cluster.Namespace,
-		},
-	}
-	err := r.Delete(context.TODO(), clusterService)
-	if err != nil && !k8serrors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
 
-	// KubernetesCluster is deleted so remove the finalizer.
+	// KubernetesCluster is deleted so remove the finalizer
+	// Rely on garbage collection to delete load balancer service
 	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
 
 	return ctrl.Result{}, nil
