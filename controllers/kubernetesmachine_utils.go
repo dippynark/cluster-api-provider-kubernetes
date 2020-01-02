@@ -175,6 +175,7 @@ func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) stri
 }
 
 func providerID(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
+	// TODO: is there some more standard format for this?
 	return fmt.Sprintf("kubernetes://%s/%s/%s", cluster.Namespace, cluster.Name, machine.Name)
 }
 
