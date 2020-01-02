@@ -156,7 +156,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
 	}
 
-	// Create load balancer service
+	// Get or create load balancer service
 	clusterService := &corev1.Service{}
 	err := r.Get(context.TODO(), types.NamespacedName{
 		Namespace: kubernetesCluster.Namespace,
@@ -174,13 +174,14 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, errors.Errorf("expected Service %s in Namespace %s to be controlled by KubernetesCluster %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
 	}
 
+	// Update load balancer type
 	// TODO: Check labels, ports and selector, update if necessary
 	if clusterService.Spec.Type != kubernetesCluster.Spec.APIServerServiceType {
 		clusterService.Spec.Type = kubernetesCluster.Spec.APIServerServiceType
 		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
-	// Update api endpoints
+	// Set ControlPlaneEndpoint with the load balancer IP so the Cluster API Cluster Controller can pull it
 	host := clusterService.Spec.ClusterIP
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		// TODO: consider all elements of ingress array
@@ -198,11 +199,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		}
 		host = loadBalancerHost
 	}
-	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
-		{
-			Host: host,
-			Port: clusterLoadBalancerPort,
-		},
+	kubernetesCluster.Spec.ControlPlaneEndpoint = infrav1.APIEndpoint{
+		Host: host,
+		Port: clusterLoadBalancerPort,
 	}
 
 	// Mark the kubernetesCluster ready

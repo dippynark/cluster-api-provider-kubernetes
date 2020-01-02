@@ -30,17 +30,16 @@ const (
 type KubernetesClusterSpec struct {
 	// +optional
 	APIServerServiceType corev1.ServiceType `json:"apiServerServiceType,omitempty"`
+
+	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+	// +optional
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 }
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {
 	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
 	Ready bool `json:"ready"`
-
-	// APIEndpoints represents the endpoints to communicate with the control
-	// plane.
-	// +optional
-	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
 }
 
 // APIEndpoint represents a reachable Kubernetes API endpoint.

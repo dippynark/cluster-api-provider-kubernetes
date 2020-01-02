@@ -39,27 +39,24 @@ spec:
             apiServerServiceType:
               description: Service Type string describes ingress methods for a service
               type: string
+            controlPlaneEndpoint:
+              description: ControlPlaneEndpoint represents the endpoint used to communicate
+                with the control plane.
+              properties:
+                host:
+                  description: Host is the hostname on which the API server is serving.
+                  type: string
+                port:
+                  description: Port is the port on which the API server is serving.
+                  type: integer
+              required:
+              - host
+              - port
+              type: object
           type: object
         status:
           description: KubernetesClusterStatus defines the observed state of KubernetesCluster
           properties:
-            apiEndpoints:
-              description: APIEndpoints represents the endpoints to communicate with
-                the control plane.
-              items:
-                description: APIEndpoint represents a reachable Kubernetes API endpoint.
-                properties:
-                  host:
-                    description: Host is the hostname on which the API server is serving.
-                    type: string
-                  port:
-                    description: Port is the port on which the API server is serving.
-                    type: integer
-                required:
-                - host
-                - port
-                type: object
-              type: array
             ready:
               description: Ready denotes that the kubernetes cluster (infrastructure)
                 is ready.
