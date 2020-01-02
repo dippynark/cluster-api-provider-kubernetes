@@ -51,28 +51,30 @@ import (
 )
 
 const (
-	machineControllerName           = "KubernetesMachine-controller"
-	defaultImageName                = "kindest/node"
-	defaultImageTag                 = "v1.17.0"
-	kindContainerName               = "kind"
-	defaultAPIServerPort            = 6443
-	libModulesVolumeName            = "lib-modules"
-	libModulesVolumeMountPath       = "/lib/modules"
-	runVolumeName                   = "run"
-	runVolumeMountPath              = "/run"
-	tmpVolumeName                   = "tmp"
-	tmpVolumeMountPath              = "/tmp"
-	varLibVolumeName                = "var-lib"
-	varLibVolumeMountPath           = "/var/lib"
-	varLogVolumeName                = "var-log"
-	varLogVolumeMountPath           = "/var/log"
-	cloudInitScriptsVolumeName      = "cloud-init-scripts"
-	cloudInitScriptsVolumeMountPath = "/opt/cloud-init"
-	cloudInitSystemdUnitsVolume     = "cloud-init-systemd-units"
-	etcSystemdSystem                = "/etc/systemd/system"
-	cloudInitBootstrapScriptName    = "bootstrap.sh"
-	cloudInitInstallScriptName      = "install.sh"
-	cloudInitInstallScript          = `#!/bin/bash
+	machineControllerName               = "KubernetesMachine-controller"
+	enableBootstrapProcessRequeuePeriod = time.Second * 5
+	setNodeProviderIDRequeuePeriod      = time.Second * 5
+	defaultImageName                    = "kindest/node"
+	defaultImageTag                     = "v1.17.0"
+	kindContainerName                   = "kind"
+	defaultAPIServerPort                = 6443
+	libModulesVolumeName                = "lib-modules"
+	libModulesVolumeMountPath           = "/lib/modules"
+	runVolumeName                       = "run"
+	runVolumeMountPath                  = "/run"
+	tmpVolumeName                       = "tmp"
+	tmpVolumeMountPath                  = "/tmp"
+	varLibVolumeName                    = "var-lib"
+	varLibVolumeMountPath               = "/var/lib"
+	varLogVolumeName                    = "var-log"
+	varLogVolumeMountPath               = "/var/log"
+	cloudInitScriptsVolumeName          = "cloud-init-scripts"
+	cloudInitScriptsVolumeMountPath     = "/opt/cloud-init"
+	cloudInitSystemdUnitsVolume         = "cloud-init-systemd-units"
+	etcSystemdSystem                    = "/etc/systemd/system"
+	cloudInitBootstrapScriptName        = "bootstrap.sh"
+	cloudInitInstallScriptName          = "install.sh"
+	cloudInitInstallScript              = `#!/bin/bash
 
 set -o errexit
 set -o nounset
@@ -450,7 +452,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Enable bootstrap process
 	if err := r.enableBoostrapProcess(cluster, machine, machinePod); err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 5}, errors.Wrap(err, "failed to enable bootstrap process")
+		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeuePeriod}, errors.Wrap(err, "failed to enable bootstrap process")
 	}
 
 	// kind container is running and bootstrap process has been enabled so
@@ -476,7 +478,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
 	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 5}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
+		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeuePeriod}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
 
 	// Set ProviderID so the Cluster API Machine Controller can pull it
