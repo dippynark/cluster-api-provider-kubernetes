@@ -29,7 +29,7 @@ const (
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
 type KubernetesClusterSpec struct {
 	// +optional
-	APIServerServiceType corev1.ServiceType `json:"apiServerServiceType,omitempty"`
+	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional

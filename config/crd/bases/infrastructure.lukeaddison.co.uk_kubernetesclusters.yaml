@@ -36,9 +36,6 @@ spec:
         spec:
           description: KubernetesClusterSpec defines the desired state of KubernetesCluster
           properties:
-            apiServerServiceType:
-              description: Service Type string describes ingress methods for a service
-              type: string
             controlPlaneEndpoint:
               description: ControlPlaneEndpoint represents the endpoint used to communicate
                 with the control plane.
@@ -54,6 +51,9 @@ spec:
               - host
               - port
               type: object
+            controlPlaneServiceType:
+              description: Service Type string describes ingress methods for a service
+              type: string
           type: object
         status:
           description: KubernetesClusterStatus defines the observed state of KubernetesCluster

@@ -48,7 +48,7 @@ metadata:
   name: example
 spec:
   # Change or remove for clusters that do not support LoadBalancer Service types
-  apiServerServiceType: LoadBalancer
+  controlPlaneServiceType: LoadBalancer
 ---
 kind: Cluster
 apiVersion: cluster.x-k8s.io/v1alpha2

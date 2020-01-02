@@ -176,8 +176,8 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Update load balancer type
 	// TODO: Check labels, ports and selector, update if necessary
-	if clusterService.Spec.Type != kubernetesCluster.Spec.APIServerServiceType {
-		clusterService.Spec.Type = kubernetesCluster.Spec.APIServerServiceType
+	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {
+		clusterService.Spec.Type = kubernetesCluster.Spec.ControlPlaneServiceType
 		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
@@ -242,7 +242,7 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 					TargetPort: intstr.FromString(apiServerPortName),
 				},
 			},
-			Type: kubernetesCluster.Spec.APIServerServiceType,
+			Type: kubernetesCluster.Spec.ControlPlaneServiceType,
 		},
 	}
 	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
