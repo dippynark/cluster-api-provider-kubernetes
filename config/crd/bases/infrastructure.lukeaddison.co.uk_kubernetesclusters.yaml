@@ -62,8 +62,6 @@ spec:
               description: Ready denotes that the kubernetes cluster (infrastructure)
                 is ready.
               type: boolean
-          required:
-          - ready
           type: object
       type: object
   version: v1alpha1

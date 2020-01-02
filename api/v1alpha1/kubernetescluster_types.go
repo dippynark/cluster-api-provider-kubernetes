@@ -39,6 +39,7 @@ type KubernetesClusterSpec struct {
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {
 	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
+	// +optional
 	Ready bool `json:"ready"`
 }
 
