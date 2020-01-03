@@ -197,13 +197,6 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 
-	// Default control plane service type
-	// TODO: move this into defaulting webhook
-	if kubernetesCluster.Spec.ControlPlaneServiceType == "" {
-		kubernetesCluster.Spec.ControlPlaneServiceType = corev1.ServiceTypeClusterIP
-		return ctrl.Result{}, nil
-	}
-
 	// Update load balancer type
 	// TODO: Check labels, ports and selector, update if necessary
 	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {

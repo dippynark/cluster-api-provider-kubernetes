@@ -31,8 +31,12 @@ const (
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
 type KubernetesClusterSpec struct {
+	// ControlPlaneServiceType is the type of Service used for the control plane
+	// load balancer.
 	// +optional
+	// +kubebuilder:validation:Enum=ClusterIP;LoadBalancer
 	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
+	// TODO: default to ClusterIP
 }
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster

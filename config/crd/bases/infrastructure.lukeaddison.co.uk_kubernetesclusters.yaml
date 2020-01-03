@@ -8,8 +8,7 @@ metadata:
 spec:
   additionalPrinterColumns:
   - JSONPath: .status.phase
-    description: KubernetesCluster status such as Provisioning/Provisioned/Failed
-      etc.
+    description: KubernetesCluster status
     name: phase
     type: string
   - JSONPath: .status.apiEndpoints[0].host
@@ -36,7 +35,7 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: KubernetesCluster is the Schema for the kubernetesclusters API
+      description: KubernetesCluster is the Schema for the kubernetesclusters API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -54,7 +53,11 @@ spec:
           description: KubernetesClusterSpec defines the desired state of KubernetesCluster
           properties:
             controlPlaneServiceType:
-              description: Service Type string describes ingress methods for a service
+              description: ControlPlaneServiceType is the type of Service used for
+                the control plane load balancer.
+              enum:
+              - ClusterIP
+              - LoadBalancer
               type: string
           type: object
         status:
@@ -67,10 +70,10 @@ spec:
                 description: APIEndpoint represents a reachable Kubernetes API endpoint.
                 properties:
                   host:
-                    description: Host is the hostname on which the API server is serving.
+                    description: Host is the hostname on which the API Server is serving.
                     type: string
                   port:
-                    description: Port is the port on which the API server is serving.
+                    description: Port is the port on which the API Server is serving.
                     format: int32
                     type: integer
                 required:
@@ -79,25 +82,25 @@ spec:
                 type: object
               type: array
             errorMessage:
-              description: ErrorMessage indicates that there is a problem reconciling
-                the state, and will be set to a descriptive error message.
+              description: ErrorMessage will be set in the event that there is a terminal
+                problem reconciling the Machine and will contain a more verbose string
+                suitable for logging and human consumption.
               type: string
             errorReason:
-              description: ErrorReason indicates that there is a problem reconciling
-                the state, and will be set to a token value suitable for programmatic
-                interpretation.
+              description: ErrorReason will be set in the event that there is a terminal
+                problem reconciling the Machine and will contain a succinct value
+                suitable for machine interpretation.
               type: string
             phase:
-              description: Phase represents the current phase of kubernetesMachine
-                actuation. e.g. Provisioning, Running, Failed, Terminated etc.
+              description: Phase represents the current phase of KubernetesCluster
+                actuation.
               type: string
             ready:
-              description: Ready denotes that the kubernetes cluster (infrastructure)
-                is ready.
+              description: Ready denotes that the KubernetesCluster is ready.
               type: boolean
             serviceName:
               description: ServiceName is the name of the Service corresponding to
-                the KubernetesCluster
+                the KubernetesCluster.
               type: string
           type: object
       type: object

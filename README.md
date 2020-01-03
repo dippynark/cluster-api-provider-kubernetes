@@ -47,7 +47,7 @@ apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
 metadata:
   name: example
 spec:
-  # Change or remove for clusters that do not support LoadBalancer Service types
+  # Change for clusters that do not support LoadBalancer Service types
   controlPlaneServiceType: LoadBalancer
 ---
 kind: Cluster
