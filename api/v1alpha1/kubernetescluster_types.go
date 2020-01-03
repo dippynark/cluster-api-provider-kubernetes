@@ -71,13 +71,14 @@ type KubernetesClusterStatus struct {
 	ServiceName *string `json:"serviceName,omitempty"`
 }
 
-// APIEndpoint represents a reachable Kubernetes API endpoint.
-type APIEndpoint struct {
-	// Host is the hostname on which the API Server is serving.
-	Host string `json:"host"`
+// SetErrorReason sets the KubernetesCluster error reason.
+func (s *KubernetesClusterStatus) SetErrorReason(v capierrors.ClusterStatusError) {
+	s.ErrorReason = &v
+}
 
-	// Port is the port on which the API Server is serving.
-	Port int32 `json:"port"`
+// SetErrorMessage sets the KubernetesCluster error message.
+func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
+	s.ErrorMessage = pointer.StringPtr(v.Error())
 }
 
 // KubernetesClusterPhase describes the state of a KuberntesCluster.
@@ -106,14 +107,13 @@ const (
 	KubernetesClusterPhaseDeleting KubernetesClusterPhase = "Deleting"
 )
 
-// SetErrorReason sets the KubernetesCluster error reason.
-func (s *KubernetesClusterStatus) SetErrorReason(v capierrors.ClusterStatusError) {
-	s.ErrorReason = &v
-}
+// APIEndpoint represents a reachable Kubernetes API endpoint.
+type APIEndpoint struct {
+	// Host is the hostname on which the API Server is serving.
+	Host string `json:"host"`
 
-// SetErrorMessage sets the KubernetesCluster error message.
-func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
-	s.ErrorMessage = pointer.StringPtr(v.Error())
+	// Port is the port on which the API Server is serving.
+	Port int32 `json:"port"`
 }
 
 // +kubebuilder:object:root=true

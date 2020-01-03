@@ -70,6 +70,16 @@ type KubernetesMachineStatus struct {
 	PodName *string `json:"podName,omitempty"`
 }
 
+// SetErrorReason sets the KubernetesMachine error reason.
+func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
+	s.ErrorReason = &v
+}
+
+// SetErrorMessage sets the KubernetesMachine error message.
+func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
+	s.ErrorMessage = pointer.StringPtr(v.Error())
+}
+
 // KubernetesMachinePhase describes the state of a KubernetesMachine.
 type KubernetesMachinePhase string
 
@@ -99,16 +109,6 @@ const (
 	// been sent to the API Server.
 	KubernetesMachinePhaseDeleting KubernetesMachinePhase = "Deleting"
 )
-
-// SetErrorReason sets the KubernetesMachine error reason.
-func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
-	s.ErrorReason = &v
-}
-
-// SetErrorMessage sets the KubernetesMachine error message.
-func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
-	s.ErrorMessage = pointer.StringPtr(v.Error())
-}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

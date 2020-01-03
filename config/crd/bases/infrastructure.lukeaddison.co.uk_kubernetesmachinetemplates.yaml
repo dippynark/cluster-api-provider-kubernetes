@@ -18,7 +18,7 @@ spec:
   validation:
     openAPIV3Schema:
       description: KubernetesMachineTemplate is the Schema for the kubernetesmachinetemplates
-        API
+        API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -34,15 +34,15 @@ spec:
           type: object
         spec:
           description: KubernetesMachineTemplateSpec defines the desired state of
-            KubernetesMachineTemplate
+            KubernetesMachineTemplate.
           properties:
             template:
               description: KubernetesMachineTemplateResource describes the data needed
-                to create a KubernetesMachine from a template
+                to create a KubernetesMachine from a template.
               properties:
                 spec:
                   description: Spec is the specification of the desired behavior of
-                    the machine.
+                    the KubernetesMachine.
                   properties:
                     activeDeadlineSeconds:
                       description: Optional duration in seconds the pod may be active
