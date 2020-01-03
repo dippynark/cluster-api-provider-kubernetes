@@ -9,6 +9,7 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/pengsrc/go-shared v0.2.0
 	github.com/pkg/errors v0.8.1
+	go.uber.org/zap v1.9.1
 	k8s.io/api v0.16.4
 	k8s.io/apimachinery v0.16.4
 	k8s.io/client-go v0.16.4
