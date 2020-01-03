@@ -159,7 +159,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// If the KubernetesCluster doesn't have foregroundDeletion, add it.
 	if !util.Contains(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents) {
-		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, "foregroundDeletion")
+		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents)
 	}
 
 	// Get or create load balancer service

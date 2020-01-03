@@ -358,7 +358,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// If the KubernetesMachine doesn't have foregroundDeletion, add it.
 	if !util.Contains(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents) {
-		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, "foregroundDeletion")
+		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents)
 	}
 
 	// Make sure bootstrap data is available and populated.
