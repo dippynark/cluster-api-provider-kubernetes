@@ -67,6 +67,7 @@ type KubernetesMachineStatus struct {
 	Ready bool `json:"ready"`
 
 	// PodName is the name of the Pod corresponding to the KubernetesMachine.
+	// +optional
 	PodName *string `json:"podName,omitempty"`
 }
 

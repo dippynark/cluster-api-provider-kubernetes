@@ -68,6 +68,7 @@ type KubernetesClusterStatus struct {
 
 	// ServiceName is the name of the Service corresponding to the
 	// KubernetesCluster.
+	// +optional
 	ServiceName *string `json:"serviceName,omitempty"`
 }
 
