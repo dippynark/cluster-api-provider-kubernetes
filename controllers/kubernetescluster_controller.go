@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,8 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 )
 
 const (
@@ -72,6 +71,23 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, err
 	}
 
+	// Initialize the patch helper
+	patchHelper, err := patch.NewHelper(kubernetesCluster, r)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	// Always attempt to Patch the KubernetesCluster object and status after each reconciliation.
+	defer func() {
+		r.reconcilePhase(kubernetesCluster)
+
+		if err := patchHelper.Patch(ctx, kubernetesCluster); err != nil {
+			log.Error(err, "failed to patch KubernetesCluster")
+			if rerr == nil {
+				rerr = err
+			}
+		}
+	}()
+
 	// Fetch the Cluster.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, kubernetesCluster.ObjectMeta)
 	if err != nil {
@@ -84,24 +100,9 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	log = log.WithValues("cluster", cluster.Name)
 
-	// Initialize the patch helper
-	patchHelper, err := patch.NewHelper(kubernetesCluster, r)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	// Always attempt to Patch the KubernetesCluster object and status after each reconciliation.
-	defer func() {
-		if err := patchHelper.Patch(ctx, kubernetesCluster); err != nil {
-			log.Error(err, "failed to patch KubernetesCluster")
-			if rerr == nil {
-				rerr = err
-			}
-		}
-	}()
-
 	// Handle deleted clusters
 	if !kubernetesCluster.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(cluster, kubernetesCluster)
+		return r.reconcileDelete(kubernetesCluster)
 	}
 
 	// Handle non-deleted clusters
@@ -110,11 +111,11 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1.KubernetesCluster{}).
+		For(&capkv1.KubernetesCluster{}).
 		Watches(
 			&source.Kind{Type: &clusterv1.Cluster{}},
 			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("KubernetesCluster")),
+				ToRequests: util.ClusterToInfrastructureMapFunc(capkv1.GroupVersion.WithKind("KubernetesCluster")),
 			},
 		).
 		Watches(
@@ -139,7 +140,7 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 
 	// Only watch services owned by a kubernetescluster
 	ref := metav1.GetControllerOf(s)
-	if ref == nil || (ref.Kind != "KubernetesCluster" || ref.APIVersion != infrav1.GroupVersion.String()) {
+	if ref == nil || (ref.Kind != "KubernetesCluster" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
 	log.Info(fmt.Sprintf("Found Service owned by KubernetesCluster %s/%s", s.Namespace, ref.Name))
@@ -152,8 +153,13 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 
 func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 	// If the KubernetesCluster doesn't have finalizer, add it.
-	if !util.Contains(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer) {
-		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
+	if !util.Contains(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer) {
+		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer)
+	}
+
+	// If the KubernetesCluster doesn't have foregroundDeletion, add it.
+	if !util.Contains(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents) {
+		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, "foregroundDeletion")
 	}
 
 	// Get or create load balancer service
@@ -163,6 +169,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
+		// TODO: if service is being recreated, request same ip as was originally aquired
 		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
@@ -171,7 +178,30 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
+		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Cluster Service is not controlled by KubernetesCluster"))
 		return ctrl.Result{}, errors.Errorf("expected Service %s in Namespace %s to be controlled by KubernetesCluster %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+	}
+
+	// Service has been created so update KubernetesCluster service name
+	if kubernetesCluster.Status.ServiceName == nil {
+		kubernetesCluster.Status.ServiceName = &clusterService.Name
+		return ctrl.Result{}, nil
+	}
+
+	// Check service name matches status
+	// This should never not happen
+	if clusterService.Name != *kubernetesCluster.Status.ServiceName {
+		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Machine Pod name has changed"))
+		return ctrl.Result{}, nil
+	}
+
+	// Default control plane service type
+	// TODO: move this into defaulting webhook
+	if kubernetesCluster.Spec.ControlPlaneServiceType == "" {
+		kubernetesCluster.Spec.ControlPlaneServiceType = corev1.ServiceTypeClusterIP
+		return ctrl.Result{}, nil
 	}
 
 	// Update load balancer type
@@ -181,7 +211,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
-	// Set ControlPlaneEndpoint with the load balancer IP so the Cluster API Cluster Controller can pull it
+	// Set api endpoint with load balancer details so the Cluster API Cluster Controller can pull it
 	host := clusterService.Spec.ClusterIP
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		// TODO: consider all elements of ingress array
@@ -199,15 +229,11 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		}
 		host = loadBalancerHost
 	}
-	kubernetesCluster.Status.APIEndpoints = []infrav1.APIEndpoint{
+	kubernetesCluster.Status.APIEndpoints = []capkv1.APIEndpoint{
 		{
 			Host: host,
 			Port: clusterLoadBalancerPort,
 		},
-	}
-	kubernetesCluster.Spec.ControlPlaneEndpoint = infrav1.APIEndpoint{
-		Host: host,
-		Port: clusterLoadBalancerPort,
 	}
 
 	// Mark the kubernetesCluster ready
@@ -216,13 +242,40 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesClusterReconciler) reconcileDelete(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 
 	// KubernetesCluster is deleted so remove the finalizer
 	// Rely on garbage collection to delete load balancer service
-	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, clusterv1.ClusterFinalizer)
+	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster) {
+	// Set the phase to "pending" if nil
+	if k.Status.Phase == "" {
+		k.Status.Phase = capkv1.KubernetesClusterPhasePending
+	}
+
+	// Set the phase to "provisioning" if service has been created
+	if k.Status.ServiceName != nil {
+		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioning
+	}
+
+	// Set the phase to "provisioned" if kubernetesCluster is ready
+	if k.Status.Ready {
+		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioned
+	}
+
+	// Set the phase to "failed" if any of Status.ErrorReason or Status.ErrorMessage is not-nil
+	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
+		k.Status.Phase = capkv1.KubernetesClusterPhaseFailed
+	}
+
+	// Set the phase to "deleting" if the deletion timestamp is set
+	if !k.DeletionTimestamp.IsZero() {
+		k.Status.Phase = capkv1.KubernetesClusterPhaseDeleting
+	}
 }
 
 func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {

@@ -18,12 +18,14 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 const (
 	// ClusterFinalizer allows KubernetesClusterReconciler to clean up resources
 	// associated with KubernetesCluster before removing it from the apiserver.
-	ClusterFinalizer = "kubernetescluster.infrastructure.lukeaddison.co.uk"
+	KubernetesClusterFinalizer = "kubernetescluster.infrastructure.lukeaddison.co.uk"
 )
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
@@ -31,14 +33,26 @@ type KubernetesClusterSpec struct {
 	// +optional
 	// +kubebuilder:default="ClusterIP"
 	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
-
-	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
-	// +optional
-	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 }
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {
+	// ErrorReason indicates that there is a problem reconciling the
+	// state, and will be set to a token value suitable for
+	// programmatic interpretation.
+	// +optional
+	ErrorReason *capierrors.ClusterStatusError `json:"errorReason,omitempty"`
+
+	// ErrorMessage indicates that there is a problem reconciling the
+	// state, and will be set to a descriptive error message.
+	// +optional
+	ErrorMessage *string `json:"errorMessage,omitempty"`
+
+	// Phase represents the current phase of kubernetesMachine actuation.
+	// e.g. Provisioning, Running, Failed, Terminated etc.
+	// +optional
+	Phase KubernetesClusterPhase `json:"phase,omitempty"`
+
 	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
 	// +optional
 	Ready bool `json:"ready"`
@@ -47,6 +61,9 @@ type KubernetesClusterStatus struct {
 	// plane.
 	// +optional
 	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
+
+	// ServiceName is the name of the Service corresponding to the KubernetesCluster
+	ServiceName *string `json:"serviceName,omitempty"`
 }
 
 // APIEndpoint represents a reachable Kubernetes API endpoint.
@@ -58,12 +75,46 @@ type APIEndpoint struct {
 	Port int32 `json:"port"`
 }
 
+// KubernetesClusterPhase describes the state of a KuberntesCluster
+type KubernetesClusterPhase string
+
+// These are the valid statuses of KubernetesClusters
+const (
+	// KubernetesClusterPhasePending is when KubernetesCluster is waiting for
+	// bootstrap data
+	KubernetesClusterPhasePending KubernetesClusterPhase = "Pending"
+
+	// KubernetesClusterPhaseProvisioning is when the Machine Pod is being
+	// provisioned
+	KubernetesClusterPhaseProvisioning KubernetesClusterPhase = "Provisioning"
+
+	// KubernetesClusterPhaseProvisioned is when the Machine Pod has been
+	// provisioned
+	KubernetesClusterPhaseProvisioned KubernetesClusterPhase = "Provisioned"
+
+	// KubernetesClusterPhaseDeleting is when the machine pod is being deleted
+	KubernetesClusterPhaseDeleting KubernetesClusterPhase = "Deleting"
+
+	// KubernetesClusterPhaseFailed is when a failure has occurred
+	KubernetesClusterPhaseFailed KubernetesClusterPhase = "Failed"
+)
+
+// SetErrorReason sets the KubernetesMachine failure reason
+func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
+	s.ErrorReason = &v
+}
+
+// SetErrorMessage sets the KubernetesMachine failure message
+func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
+	s.ErrorMessage = pointer.StringPtr(v.Error())
+}
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
-// +kubebuilder:printcolumn:name="control-plane-service-type",type="string",JSONPath=".spec.controlPlaneServiceType",description="Service type used for the control plane load balancer"
-// +kubebuilder:printcolumn:name="host",type="string",JSONPath=".spec.controlPlaneEndpoint.host",description="Endpoint host for reaching the control plane"
-// +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".spec.controlPlaneEndpoint.port",description="Endpoint port for reaching the control plane"
+// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesCluster status such as Provisioning/Provisioned/Failed etc."
+// +kubebuilder:printcolumn:name="host",type="string",JSONPath=".status.apiEndpoints[0].host",description="Endpoint host for reaching the control plane"
+// +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".status.apiEndpoints[0].port",description="Endpoint port for reaching the control plane"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // KubernetesCluster is the Schema for the kubernetesclusters API

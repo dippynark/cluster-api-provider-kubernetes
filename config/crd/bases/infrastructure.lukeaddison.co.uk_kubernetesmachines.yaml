@@ -12,8 +12,7 @@ spec:
     name: provider-id
     type: string
   - JSONPath: .status.phase
-    description: KubernetesMachine status such as Provisioning/Running/Failed/Terminated
-      etc
+    description: KubernetesMachine status such as Provisioning/Running/Failed etc.
     name: phase
     type: string
   - JSONPath: .status.podName
@@ -5575,45 +5574,24 @@ spec:
         status:
           description: KubernetesMachineStatus defines the observed state of KubernetesMachine
           properties:
-            failureMessage:
-              description: "FailureMessage will be set in the event that there is
-                a terminal problem reconciling the Machine and will contain a more
-                verbose string suitable for logging and human consumption. \n This
-                field should not be set for transitive errors that a controller faces
-                that are expected to be fixed automatically over time (like service
-                outages), but instead indicate that something is fundamentally wrong
-                with the Machine's spec or the configuration of the controller, and
-                that manual intervention is required. Examples of terminal errors
-                would be invalid combinations of settings in the spec, values that
-                are unsupported by the controller, or the responsible controller itself
-                being critically misconfigured. \n Any transient errors that occur
-                during the reconciliation of Machines can be added as events to the
-                Machine object and/or logged in the controller's output."
+            errorMessage:
+              description: ErrorMessage indicates that there is a problem reconciling
+                the state, and will be set to a descriptive error message.
               type: string
-            failureReason:
-              description: "FailureReason will be set in the event that there is a
-                terminal problem reconciling the Machine and will contain a succinct
-                value suitable for machine interpretation. \n This field should not
-                be set for transitive errors that a controller faces that are expected
-                to be fixed automatically over time (like service outages), but instead
-                indicate that something is fundamentally wrong with the Machine's
-                spec or the configuration of the controller, and that manual intervention
-                is required. Examples of terminal errors would be invalid combinations
-                of settings in the spec, values that are unsupported by the controller,
-                or the responsible controller itself being critically misconfigured.
-                \n Any transient errors that occur during the reconciliation of Machines
-                can be added as events to the Machine object and/or logged in the
-                controller's output."
+            errorReason:
+              description: ErrorReason indicates that there is a problem reconciling
+                the state, and will be set to a token value suitable for programmatic
+                interpretation.
               type: string
             phase:
               description: Phase represents the current phase of kubernetesMachine
-                actuation. E.g. Provisioning, Running, Failed, Terminated etc.
+                actuation. e.g. Provisioning, Running, Failed, Terminated etc.
               type: string
             podName:
-              description: PodName is the name of the Pod corresponding to the KubernetesMachine
+              description: PodName is the name of the Pod corresponding to the KubernetesMachine.
               type: string
             ready:
-              description: Ready denotes that the machine (kubernetes pod) is ready
+              description: Ready denotes that the machine (kubernetes pod) is ready.
               type: boolean
           type: object
       type: object

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
-	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
@@ -133,6 +132,23 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, err
 	}
 
+	// Initialize the patch helper
+	patchHelper, err := patch.NewHelper(kubernetesMachine, r.Client)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	// Always attempt to Patch the KubernetesMachine object and status after each reconciliation.
+	defer func() {
+		r.reconcilePhase(kubernetesMachine)
+
+		if err := patchHelper.Patch(ctx, kubernetesMachine); err != nil {
+			log.Error(err, "failed to patch KubernetesMachine")
+			if rerr == nil {
+				rerr = err
+			}
+		}
+	}()
+
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, kubernetesMachine.ObjectMeta)
 	if err != nil {
@@ -158,12 +174,6 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	log = log.WithValues("cluster", cluster.Name)
 
-	// Make sure infrastructure is ready
-	if !cluster.Status.InfrastructureReady {
-		log.Info("Waiting for KubernetesCluster Controller to create cluster infrastructure")
-		return ctrl.Result{}, nil
-	}
-
 	// Fetch the Kubernetes Cluster.
 	kubernetesCluster := &capkv1.KubernetesCluster{}
 	kubernetesClusterName := types.NamespacedName{
@@ -177,24 +187,15 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	log = log.WithValues("kubernetes-cluster", kubernetesCluster.Name)
 
-	// Initialize the patch helper
-	patchHelper, err := patch.NewHelper(kubernetesMachine, r.Client)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	// Always attempt to Patch the KubernetesMachine object and status after each reconciliation.
-	defer func() {
-		if err := patchHelper.Patch(ctx, kubernetesMachine); err != nil {
-			log.Error(err, "failed to patch KubernetesMachine")
-			if rerr == nil {
-				rerr = err
-			}
-		}
-	}()
-
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(cluster, machine, kubernetesMachine)
+	}
+
+	// Make sure infrastructure is ready
+	if !cluster.Status.InfrastructureReady {
+		log.Info("Waiting for KubernetesCluster Controller to create cluster infrastructure")
+		return ctrl.Result{}, nil
 	}
 
 	// Handle non-deleted machines
@@ -204,15 +205,15 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 // SetupWithManager adds watches for this controller
 func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1.KubernetesMachine{}).
+		For(&capkv1.KubernetesMachine{}).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
 			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("KubernetesMachine")),
+				ToRequests: util.MachineToInfrastructureMapFunc(capkv1.GroupVersion.WithKind("KubernetesMachine")),
 			},
 		).
 		Watches(
-			&source.Kind{Type: &infrav1.KubernetesCluster{}},
+			&source.Kind{Type: &capkv1.KubernetesCluster{}},
 			&handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(r.KubernetesClusterToKubernetesMachines),
 			},
@@ -242,7 +243,7 @@ func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // to enqeue requests for reconciliation of KubernetesMachines.
 func (r *KubernetesMachineReconciler) KubernetesClusterToKubernetesMachines(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-	c, ok := o.Object.(*infrav1.KubernetesCluster)
+	c, ok := o.Object.(*capkv1.KubernetesCluster)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a KubernetesCluster but got a %T", o.Object), "failed to get KubernetesMachine for KubernetesCluster")
 		return nil
@@ -288,7 +289,7 @@ func (r *KubernetesMachineReconciler) PodToKubernetesMachine(o handler.MapObject
 
 	// Only watch pods owned by a kubernetesmachine
 	ref := metav1.GetControllerOf(s)
-	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != infrav1.GroupVersion.String()) {
+	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
 	log.Info(fmt.Sprintf("Found Pod owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
@@ -311,7 +312,7 @@ func (r *KubernetesMachineReconciler) SecretToKubernetesMachine(o handler.MapObj
 
 	// Only watch secrets owned by a kubernetesmachine
 	ref := metav1.GetControllerOf(s)
-	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != infrav1.GroupVersion.String()) {
+	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
 	log.Info(fmt.Sprintf("Found Secret owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
@@ -334,7 +335,7 @@ func (r *KubernetesMachineReconciler) PersistentVolumeClaimToKubernetesMachine(o
 
 	// Only watch persistentvolumeclaim owned by a kubernetesmachine
 	ref := metav1.GetControllerOf(s)
-	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != infrav1.GroupVersion.String()) {
+	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
 	log.Info(fmt.Sprintf("Found PersistentVolumeClaim owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
@@ -346,13 +347,18 @@ func (r *KubernetesMachineReconciler) PersistentVolumeClaimToKubernetesMachine(o
 
 func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the kubernetesMachine is in an error state, return early
-	if kubernetesMachine.Status.FailureReason != nil || kubernetesMachine.Status.FailureMessage != nil {
+	if kubernetesMachine.Status.ErrorReason != nil || kubernetesMachine.Status.ErrorMessage != nil {
 		return reconcile.Result{}, nil
 	}
 
 	// If the KubernetesMachine doesn't have finalizer, add it.
-	if !util.Contains(kubernetesMachine.Finalizers, capkv1.MachineFinalizer) {
-		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
+	if !util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
+		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
+	}
+
+	// If the KubernetesMachine doesn't have foregroundDeletion, add it.
+	if !util.Contains(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents) {
+		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, "foregroundDeletion")
 	}
 
 	// Make sure bootstrap data is available and populated.
@@ -369,14 +375,12 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
 		// TODO: should we use the existence of the providerID instead?
-		// this would require changes to when/how we set podName in the status
-		if kubernetesMachine.Status.GetPhase() != infrav1.KubernetesMachinePhaseUnknown {
+		if kubernetesMachine.Status.PodName != nil {
 			// Machine pod was previous created so something has deleted it
 			// This could be due to the Node it was running on failing (for example)
 			// We rely on a higher level object for recreation
-			kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
-			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
+			kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+			kubernetesMachine.Status.SetErrorMessage(errors.New("Machine Pod cannot be found"))
 			return ctrl.Result{}, nil
 		}
 		return r.createMachinePod(cluster, machine, kubernetesMachine)
@@ -387,24 +391,29 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Ensure machine pod is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(machinePod); ref == nil || ref.UID != kubernetesMachine.UID {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod is not controlled by KubernetesMachine"))
+		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod is not controlled by KubernetesMachine"))
 		return ctrl.Result{}, nil
 	}
 
-	// Machine Pod has been created so update KubernetesMachine phase and podName
-	if kubernetesMachine.Status.GetPhase() == infrav1.KubernetesMachinePhaseUnknown {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseProvisioning)
-		kubernetesMachine.Status.SetPodName(machinePod.Name)
+	// Machine Pod has been created so update KubernetesMachine pod name
+	if kubernetesMachine.Status.PodName == nil {
+		kubernetesMachine.Status.PodName = &machinePod.Name
 		return ctrl.Result{}, nil
 	}
 
-	// Handle deleted machine pods
+	// Check machine pod name matches status
+	// This should never not happen
+	if machinePod.Name != *kubernetesMachine.Status.PodName {
+		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod name has changed"))
+		return ctrl.Result{}, nil
+	}
+
+	// Handle deleting machine pod
 	if !machinePod.ObjectMeta.DeletionTimestamp.IsZero() {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod has been deleted unexpectedly"))
+		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod has been deleted unexpectedly"))
 		return ctrl.Result{}, nil
 	}
 
@@ -422,15 +431,14 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 	// Ensure secret is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(cloudInitScriptSecret); ref == nil || ref.UID != kubernetesMachine.UID {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseFailed)
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("bootstrap Secret is not controlled by KubernetesMachine"))
+		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("bootstrap Secret is not controlled by KubernetesMachine"))
 		return ctrl.Result{}, nil
 	}
 
 	// Create persistent volume claims
 	// TODO: clean up pvcs if they are removed from the list of templates
-	// TODO: set failure phase/reason/message if irrecoverable error occurs
+	// TODO: set error phase/reason/message if irrecoverable error occurs
 	err = r.createPersistentVolumeClaims(kubernetesMachine)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create persistent volume claims")
@@ -443,9 +451,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Terminated != nil {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseTerminated)
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("kind container has terminated: %s", kindContainerStatus.State.Terminated.Reason))
+		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("kind container has terminated: %s", kindContainerStatus.State.Terminated.Reason))
 
 		return ctrl.Result{}, nil
 	}
@@ -459,23 +466,15 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeuePeriod}, errors.Wrap(err, "failed to enable bootstrap process")
 	}
 
-	// kind container is running and bootstrap process has been enabled so
-	// update KubernetesMachine phase
-	if kubernetesMachine.Status.GetPhase() != infrav1.KubernetesMachinePhaseRunning {
-		kubernetesMachine.Status.SetPhase(infrav1.KubernetesMachinePhaseRunning)
-		return ctrl.Result{}, nil
-	}
-
 	// If the machine has already been provisioned, return
 	// TODO: this shouldn't change, but should we set it again just in case?
 	if kubernetesMachine.Spec.ProviderID != nil {
 		return ctrl.Result{}, nil
 	}
 
-	// Check Machine Pod is ready before attempting to set providerID
-	// TODO: do we need this for worker Nodes?
-	if !utils.IsPodReady(machinePod) {
-		r.Log.Info("Waiting for machine Pod to be ready")
+	// Check kind container is ready before attempting to set providerID
+	if !kindContainerStatus.Ready {
+		r.Log.Info("Waiting for kind container to be ready")
 		return ctrl.Result{}, nil
 	}
 
@@ -489,6 +488,13 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	providerID := providerID(cluster, machine)
 	kubernetesMachine.Spec.ProviderID = &providerID
 
+	// Check Machine Pod is ready before marking kubernetesMachine ready
+	// TODO: do we need this for worker Nodes?
+	if !utils.IsPodReady(machinePod) {
+		r.Log.Info("Waiting for machine Pod to be ready")
+		return ctrl.Result{}, nil
+	}
+
 	// Mark the kubernetesMachine ready
 	// TODO: should ready ever go back to false?
 	kubernetesMachine.Status.Ready = true
@@ -499,7 +505,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
-	if util.IsControlPlaneMachine(machine) {
+	if util.IsControlPlaneMachine(machine) && util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
 		// Check if machine pod exists
 		machinePod := &corev1.Pod{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{
@@ -519,13 +525,52 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 					return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
 				}
 			}
+		} else {
+			// TODO: the pod is not found, do we want to hang here instead?
+			kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
+			kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
+			kubernetesMachine.Status.SetErrorMessage(errors.New("Machine Pod cannot be found"))
+
+			return ctrl.Result{}, nil
 		}
 	}
 
 	// Machine is deleted so remove the finalizer.
-	kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.MachineFinalizer)
+	kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine) {
+	// Set the phase to "pending" if nil
+	if k.Status.Phase == "" {
+		k.Status.Phase = capkv1.KubernetesMachinePhasePending
+	}
+
+	// Set the phase to "provisioning" if pod has been created
+	if k.Status.PodName != nil {
+		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioning
+	}
+
+	// Set the phase to "provisioned" if providerID has been set
+	if k.Spec.ProviderID != nil {
+		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioned
+	}
+
+	// Set the phase to "running" if provider ID is set and kubernetes machine is ready
+	if k.Spec.ProviderID != nil && k.Status.Ready {
+		k.Status.Phase = capkv1.KubernetesMachinePhaseRunning
+	}
+
+	// Set the phase to "failed" if any of Status.ErrorReason or Status.ErrorMessage is not-nil
+	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
+		k.Status.Phase = capkv1.KubernetesMachinePhaseFailed
+	}
+
+	// Set the phase to "deleting" if the deletion timestamp is set
+	if !k.DeletionTimestamp.IsZero() {
+		k.Status.Phase = capkv1.KubernetesMachinePhaseDeleting
+	}
 }
 
 func (r *KubernetesMachineReconciler) enableBoostrapProcess(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
@@ -618,14 +663,14 @@ func (r *KubernetesMachineReconciler) kubeadmReset(cluster *clusterv1.Cluster, m
 	return nil
 }
 
-func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	if util.IsControlPlaneMachine(machine) {
 		return r.createControlPlaneMachinePod(cluster, machine, kubernetesMachine)
 	}
 	return r.createWorkerMachinePod(cluster, machine, kubernetesMachine)
 }
 
-func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
 	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
 	if err != nil {
@@ -679,7 +724,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
-func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
 	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
 	if err != nil {
@@ -698,7 +743,7 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
-func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *infrav1.KubernetesMachine) (*corev1.Pod, error) {
+func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (*corev1.Pod, error) {
 
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
