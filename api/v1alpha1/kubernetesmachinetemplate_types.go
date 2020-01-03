@@ -19,7 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// KubernetesMachineTemplateSpec defines the desired state of KubernetesMachineTemplate
+// KubernetesMachineTemplateSpec defines the desired state of
+// KubernetesMachineTemplate.
 type KubernetesMachineTemplateSpec struct {
 	Template KubernetesMachineTemplateResource `json:"template"`
 }
@@ -27,7 +28,8 @@ type KubernetesMachineTemplateSpec struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories=cluster-api
 
-// KubernetesMachineTemplate is the Schema for the kubernetesmachinetemplates API
+// KubernetesMachineTemplate is the Schema for the kubernetesmachinetemplates
+// API.
 type KubernetesMachineTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -37,7 +39,7 @@ type KubernetesMachineTemplate struct {
 
 // +kubebuilder:object:root=true
 
-// KubernetesMachineTemplateList contains a list of KubernetesMachineTemplate
+// KubernetesMachineTemplateList contains a list of KubernetesMachineTemplate.
 type KubernetesMachineTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -48,8 +50,10 @@ func init() {
 	SchemeBuilder.Register(&KubernetesMachineTemplate{}, &KubernetesMachineTemplateList{})
 }
 
-// KubernetesMachineTemplateResource describes the data needed to create a KubernetesMachine from a template
+// KubernetesMachineTemplateResource describes the data needed to create a
+// KubernetesMachine from a template.
 type KubernetesMachineTemplateResource struct {
-	// Spec is the specification of the desired behavior of the machine.
+	// Spec is the specification of the desired behavior of the
+	// KubernetesMachine.
 	Spec KubernetesMachineSpec `json:"spec"`
 }
