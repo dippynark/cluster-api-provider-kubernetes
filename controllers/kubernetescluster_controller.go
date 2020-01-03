@@ -88,6 +88,11 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		}
 	}()
 
+	// TODO: move defaulting into webhook
+	if kubernetesCluster.Spec.ControlPlaneServiceType == "" {
+		kubernetesCluster.Spec.ControlPlaneServiceType = corev1.ServiceTypeClusterIP
+	}
+
 	// Fetch the cluster
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, kubernetesCluster.ObjectMeta)
 	if err != nil {
