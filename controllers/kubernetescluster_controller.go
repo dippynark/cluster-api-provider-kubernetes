@@ -245,27 +245,28 @@ func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.
 }
 
 func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster) {
-	// Set the phase to "pending" if nil
+	// Set phase to "Pending" if nil
 	if k.Status.Phase == "" {
 		k.Status.Phase = capkv1.KubernetesClusterPhasePending
 	}
 
-	// Set the phase to "provisioning" if service has been created
+	// Set phase to "Provisioning" if the corresponding Service has been created
 	if k.Status.ServiceName != nil {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioning
 	}
 
-	// Set the phase to "provisioned" if kubernetesCluster is ready
+	// Set phase to "Provisioned" if the KubernetesCluster is ready
 	if k.Status.Ready {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioned
 	}
 
-	// Set the phase to "failed" if any of Status.ErrorReason or Status.ErrorMessage is not-nil
+	// Set phase to "Failed" if any of Status.ErrorReason or Status.ErrorMessage
+	// is not-nil
 	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseFailed
 	}
 
-	// Set the phase to "deleting" if the deletion timestamp is set
+	// Set phase to "Deleting" if the deletion timestamp is set
 	if !k.DeletionTimestamp.IsZero() {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseDeleting
 	}

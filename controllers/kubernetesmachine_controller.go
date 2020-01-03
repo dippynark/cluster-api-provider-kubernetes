@@ -542,32 +542,34 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 }
 
 func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine) {
-	// Set the phase to "pending" if nil
+	// Set phase to "Pending" if nil
 	if k.Status.Phase == "" {
 		k.Status.Phase = capkv1.KubernetesMachinePhasePending
 	}
 
-	// Set the phase to "provisioning" if pod has been created
+	// Set phase to "Provisioning" if the corresponding Pod has been created
 	if k.Status.PodName != nil {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioning
 	}
 
-	// Set the phase to "provisioned" if providerID has been set
+	// Set phase to "Provisioned" if providerID has been set
 	if k.Spec.ProviderID != nil {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioned
 	}
 
-	// Set the phase to "running" if provider ID is set and kubernetes machine is ready
+	// Set phase to "Running" if providerID has been set and the
+	// KubernetesMachine is ready
 	if k.Spec.ProviderID != nil && k.Status.Ready {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseRunning
 	}
 
-	// Set the phase to "failed" if any of Status.ErrorReason or Status.ErrorMessage is not-nil
+	// Set phase to "Failed" if any of Status.ErrorReason or Status.ErrorMessage
+	// is not-nil
 	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseFailed
 	}
 
-	// Set the phase to "deleting" if the deletion timestamp is set
+	// Set phase to "Deleting" if the deletion timestamp is set
 	if !k.DeletionTimestamp.IsZero() {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseDeleting
 	}

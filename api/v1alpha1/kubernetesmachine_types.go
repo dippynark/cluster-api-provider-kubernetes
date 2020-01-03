@@ -23,40 +23,46 @@ import (
 )
 
 const (
-	// MachineFinalizer allows ReconcileKubernetesMachine to clean up resources
-	// associated with KubernetesMachine before removing it from the apiserver.
+	// KubernetesMachineFinalizer allows ReconcileKubernetesMachine to clean up
+	// resources associated with KubernetesMachine before removing it from the
+	// API Server.
 	KubernetesMachineFinalizer = "kubernetesmachine.infrastructure.lukeaddison.co.uk"
 )
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
-	// ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`
+	// ProviderID is in the form
+	// `kubernetes://<namespace>/<clusterName>/<machineName>`.
 	// +optional
-	ProviderID     *string `json:"providerID,omitempty"`
+	ProviderID *string `json:"providerID,omitempty"`
+	// PodSpec forms the base of the Pod corresponding to the KubernetesMachine.
 	corev1.PodSpec `json:",inline"`
+	// VolumeClaimTemplates is a list of claims that PodSpec is allowed to
+	// reference as volumeMounts. This has similar semantics to StatefulSet
+	// volumeClaimTemplates.
 	// +optional
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim `json:"volumeClaimTemplates,omitempty"`
 }
 
-// KubernetesMachineStatus defines the observed state of KubernetesMachine
+// KubernetesMachineStatus defines the observed state of KubernetesMachine.
 type KubernetesMachineStatus struct {
-	// ErrorReason indicates that there is a problem reconciling the
-	// state, and will be set to a token value suitable for
-	// programmatic interpretation.
+	// ErrorReason will be set in the event that there is a terminal problem
+	// reconciling the KubernetesMachine and will contain a succinct value
+	// suitable for machine interpretation.
 	// +optional
 	ErrorReason *capierrors.MachineStatusError `json:"errorReason,omitempty"`
 
-	// ErrorMessage indicates that there is a problem reconciling the
-	// state, and will be set to a descriptive error message.
+	// ErrorMessage will be set in the event that there is a terminal problem
+	// reconciling the KubernetesMachine and will contain a more verbose string
+	// suitable for logging and human consumption.
 	// +optional
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 
-	// Phase represents the current phase of kubernetesMachine actuation.
-	// e.g. Provisioning, Running, Failed, Terminated etc.
+	// Phase represents the current phase of KubernetesMachine actuation.
 	// +optional
 	Phase KubernetesMachinePhase `json:"phase,omitempty"`
 
-	// Ready denotes that the machine (kubernetes pod) is ready.
+	// Ready denotes that the KubernetesMachine is ready.
 	// +optional
 	Ready bool `json:"ready"`
 
@@ -64,39 +70,42 @@ type KubernetesMachineStatus struct {
 	PodName *string `json:"podName,omitempty"`
 }
 
-// KubernetesMachinePhase describes the state of a Machine Pod
+// KubernetesMachinePhase describes the state of a KubernetesMachine.
 type KubernetesMachinePhase string
 
-// These are the valid statuses of KubernetesMachines
+// These are the valid statuses of KubernetesMachines.
 const (
-	// KubernetesMachinePhasePending is when Machine Pod hasn't been created yet
+	// KubernetesMachinePhasePending is the first state a KubernetesMachine is
+	// assigned after being created.
 	KubernetesMachinePhasePending KubernetesMachinePhase = "Pending"
 
-	// KubernetesMachinePhaseProvisioning is when the Machine Pod is being
-	// provisioned
+	// KubernetesMachinePhaseProvisioning is the state when the corresponding
+	// Pod has been created.
 	KubernetesMachinePhaseProvisioning KubernetesMachinePhase = "Provisioning"
 
-	// KubernetesMachinePhaseProvisioned is when the Machine Pod has been
-	// provisioned
+	// KubernetesMachinePhaseProvisioned is the state when the ProviderID has
+	// been set.
 	KubernetesMachinePhaseProvisioned KubernetesMachinePhase = "Provisioned"
 
-	// KubernetesMachinePhaseRunning is when the Machine Pod's kind container is
-	// running and the bootstrap process has been enabled
+	// KubernetesMachinePhaseRunning is the state when the ProviderID has been
+	// set and the KubernetesMachine is ready.
 	KubernetesMachinePhaseRunning KubernetesMachinePhase = "Running"
 
-	// KubernetesMachinePhaseDeleting is when the machine pod is being deleted
-	KubernetesMachinePhaseDeleting KubernetesMachinePhase = "Deleting"
-
-	// KubernetesMachinePhaseFailed is when a failure has occurred
+	// KubernetesMachinePhaseFailed is the state when the system might require
+	// manual intervention.
 	KubernetesMachinePhaseFailed KubernetesMachinePhase = "Failed"
+
+	// KubernetesMachinePhaseDeleting is the state when a delete request has
+	// been sent to the API Server.
+	KubernetesMachinePhaseDeleting KubernetesMachinePhase = "Deleting"
 )
 
-// SetErrorReason sets the KubernetesCluster failure reason
+// SetErrorReason sets the KubernetesMachine error reason.
 func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
 	s.ErrorReason = &v
 }
 
-// SetErrorMessage sets the KubernetesCluster failure message
+// SetErrorMessage sets the KubernetesMachine error message.
 func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
 	s.ErrorMessage = pointer.StringPtr(v.Error())
 }
@@ -105,11 +114,11 @@ func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
 // +kubebuilder:printcolumn:name="provider-id",type="string",JSONPath=".spec.providerID",description="Provider ID"
-// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesMachine status such as Provisioning/Running/Failed etc."
+// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesMachine status"
 // +kubebuilder:printcolumn:name="pod-name",type="string",JSONPath=".status.podName",description="The name of the Pod corresponding to the KubernetesMachine"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// KubernetesMachine is the Schema for the kubernetesmachines API
+// KubernetesMachine is the Schema for the kubernetesmachines API.
 type KubernetesMachine struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -120,7 +129,7 @@ type KubernetesMachine struct {
 
 // +kubebuilder:object:root=true
 
-// KubernetesMachineList contains a list of KubernetesMachine
+// KubernetesMachineList contains a list of KubernetesMachine.
 type KubernetesMachineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

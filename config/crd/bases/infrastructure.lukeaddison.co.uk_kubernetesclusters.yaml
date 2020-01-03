@@ -61,7 +61,7 @@ spec:
               type: string
           type: object
         status:
-          description: KubernetesClusterStatus defines the observed state of KubernetesCluster
+          description: KubernetesClusterStatus defines the observed state of a KubernetesCluster.
           properties:
             apiEndpoints:
               description: APIEndpoints represents the endpoints to communicate with
@@ -83,13 +83,13 @@ spec:
               type: array
             errorMessage:
               description: ErrorMessage will be set in the event that there is a terminal
-                problem reconciling the Machine and will contain a more verbose string
-                suitable for logging and human consumption.
+                problem reconciling the KubernetesCluster and will contain a more
+                verbose string suitable for logging and human consumption.
               type: string
             errorReason:
               description: ErrorReason will be set in the event that there is a terminal
-                problem reconciling the Machine and will contain a succinct value
-                suitable for machine interpretation.
+                problem reconciling the KubernetesCluster and will contain a succinct
+                value suitable for machine interpretation.
               type: string
             phase:
               description: Phase represents the current phase of KubernetesCluster

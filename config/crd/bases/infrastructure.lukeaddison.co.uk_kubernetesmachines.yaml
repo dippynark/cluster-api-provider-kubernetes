@@ -12,7 +12,7 @@ spec:
     name: provider-id
     type: string
   - JSONPath: .status.phase
-    description: KubernetesMachine status such as Provisioning/Running/Failed etc.
+    description: KubernetesMachine status
     name: phase
     type: string
   - JSONPath: .status.podName
@@ -35,7 +35,7 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: KubernetesMachine is the Schema for the kubernetesmachines API
+      description: KubernetesMachine is the Schema for the kubernetesmachines API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -3869,7 +3869,7 @@ spec:
                 or zero if there is no default.
               type: string
             providerID:
-              description: ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`
+              description: ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`.
               type: string
             readinessGates:
               description: 'If specified, all readiness gates will be evaluated for
@@ -4194,6 +4194,9 @@ spec:
                 type: object
               type: array
             volumeClaimTemplates:
+              description: VolumeClaimTemplates is a list of claims that PodSpec is
+                allowed to reference as volumeMounts. This has similar semantics to
+                StatefulSet volumeClaimTemplates.
               items:
                 description: PersistentVolumeClaim is a user's request for and claim
                   to a persistent volume
@@ -5572,26 +5575,27 @@ spec:
           required:
           type: object
         status:
-          description: KubernetesMachineStatus defines the observed state of KubernetesMachine
+          description: KubernetesMachineStatus defines the observed state of KubernetesMachine.
           properties:
             errorMessage:
-              description: ErrorMessage indicates that there is a problem reconciling
-                the state, and will be set to a descriptive error message.
+              description: ErrorMessage will be set in the event that there is a terminal
+                problem reconciling the KubernetesMachine and will contain a more
+                verbose string suitable for logging and human consumption.
               type: string
             errorReason:
-              description: ErrorReason indicates that there is a problem reconciling
-                the state, and will be set to a token value suitable for programmatic
-                interpretation.
+              description: ErrorReason will be set in the event that there is a terminal
+                problem reconciling the KubernetesMachine and will contain a succinct
+                value suitable for machine interpretation.
               type: string
             phase:
-              description: Phase represents the current phase of kubernetesMachine
-                actuation. e.g. Provisioning, Running, Failed, Terminated etc.
+              description: Phase represents the current phase of KubernetesMachine
+                actuation.
               type: string
             podName:
               description: PodName is the name of the Pod corresponding to the KubernetesMachine.
               type: string
             ready:
-              description: Ready denotes that the machine (kubernetes pod) is ready.
+              description: Ready denotes that the KubernetesMachine is ready.
               type: boolean
           type: object
       type: object

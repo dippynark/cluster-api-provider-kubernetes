@@ -39,17 +39,17 @@ type KubernetesClusterSpec struct {
 	// TODO: default to ClusterIP
 }
 
-// KubernetesClusterStatus defines the observed state of KubernetesCluster
+// KubernetesClusterStatus defines the observed state of a KubernetesCluster.
 type KubernetesClusterStatus struct {
 	// ErrorReason will be set in the event that there is a terminal problem
-	// reconciling the Machine and will contain a succinct value suitable for
-	// machine interpretation.
+	// reconciling the KubernetesCluster and will contain a succinct value
+	// suitable for machine interpretation.
 	// +optional
 	ErrorReason *capierrors.ClusterStatusError `json:"errorReason,omitempty"`
 
 	// ErrorMessage will be set in the event that there is a terminal problem
-	// reconciling the Machine and will contain a more verbose string suitable
-	// for logging and human consumption.
+	// reconciling the KubernetesCluster and will contain a more verbose string
+	// suitable for logging and human consumption.
 	// +optional
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 
@@ -83,7 +83,7 @@ type APIEndpoint struct {
 // KubernetesClusterPhase describes the state of a KuberntesCluster.
 type KubernetesClusterPhase string
 
-// These are the valid statuses of KubernetesClusters
+// These are the valid statuses of KubernetesClusters.
 const (
 	// KubernetesClusterPhasePending is the first state a KubernetesCluster is
 	// assigned after being created.
@@ -98,7 +98,7 @@ const (
 	KubernetesClusterPhaseProvisioned KubernetesClusterPhase = "Provisioned"
 
 	// KubernetesClusterPhaseFailed is the state when the system might require
-	// manual intervention
+	// manual intervention.
 	KubernetesClusterPhaseFailed KubernetesClusterPhase = "Failed"
 
 	// KubernetesClusterPhaseDeleting is the state when a delete request has
