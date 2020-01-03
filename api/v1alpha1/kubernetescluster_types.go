@@ -23,37 +23,37 @@ import (
 )
 
 const (
-	// ClusterFinalizer allows KubernetesClusterReconciler to clean up resources
-	// associated with KubernetesCluster before removing it from the apiserver.
+	// KubernetesClusterFinalizer allows KubernetesClusterReconciler to clean up
+	// resources associated with a KubernetesCluster before removing it from the
+	// API Server.
 	KubernetesClusterFinalizer = "kubernetescluster.infrastructure.lukeaddison.co.uk"
 )
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster
 type KubernetesClusterSpec struct {
 	// +optional
-	// +kubebuilder:default="ClusterIP"
 	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
 }
 
 // KubernetesClusterStatus defines the observed state of KubernetesCluster
 type KubernetesClusterStatus struct {
-	// ErrorReason indicates that there is a problem reconciling the
-	// state, and will be set to a token value suitable for
-	// programmatic interpretation.
+	// ErrorReason will be set in the event that there is a terminal problem
+	// reconciling the Machine and will contain a succinct value suitable for
+	// machine interpretation.
 	// +optional
 	ErrorReason *capierrors.ClusterStatusError `json:"errorReason,omitempty"`
 
-	// ErrorMessage indicates that there is a problem reconciling the
-	// state, and will be set to a descriptive error message.
+	// ErrorMessage will be set in the event that there is a terminal problem
+	// reconciling the Machine and will contain a more verbose string suitable
+	// for logging and human consumption.
 	// +optional
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 
-	// Phase represents the current phase of kubernetesMachine actuation.
-	// e.g. Provisioning, Running, Failed, Terminated etc.
+	// Phase represents the current phase of KubernetesCluster actuation.
 	// +optional
 	Phase KubernetesClusterPhase `json:"phase,omitempty"`
 
-	// Ready denotes that the kubernetes cluster (infrastructure) is ready.
+	// Ready denotes that the KubernetesCluster is ready.
 	// +optional
 	Ready bool `json:"ready"`
 
@@ -62,62 +62,65 @@ type KubernetesClusterStatus struct {
 	// +optional
 	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
 
-	// ServiceName is the name of the Service corresponding to the KubernetesCluster
+	// ServiceName is the name of the Service corresponding to the
+	// KubernetesCluster.
 	ServiceName *string `json:"serviceName,omitempty"`
 }
 
 // APIEndpoint represents a reachable Kubernetes API endpoint.
 type APIEndpoint struct {
-	// Host is the hostname on which the API server is serving.
+	// Host is the hostname on which the API Server is serving.
 	Host string `json:"host"`
 
-	// Port is the port on which the API server is serving.
+	// Port is the port on which the API Server is serving.
 	Port int32 `json:"port"`
 }
 
-// KubernetesClusterPhase describes the state of a KuberntesCluster
+// KubernetesClusterPhase describes the state of a KuberntesCluster.
 type KubernetesClusterPhase string
 
 // These are the valid statuses of KubernetesClusters
 const (
-	// KubernetesClusterPhasePending is when KubernetesCluster is waiting for
-	// bootstrap data
+	// KubernetesClusterPhasePending is the first state a KubernetesCluster is
+	// assigned after being created.
 	KubernetesClusterPhasePending KubernetesClusterPhase = "Pending"
 
-	// KubernetesClusterPhaseProvisioning is when the Machine Pod is being
-	// provisioned
+	// KubernetesClusterPhaseProvisioning is the state when the control plane
+	// Service has been created.
 	KubernetesClusterPhaseProvisioning KubernetesClusterPhase = "Provisioning"
 
-	// KubernetesClusterPhaseProvisioned is when the Machine Pod has been
-	// provisioned
+	// KubernetesClusterPhaseProvisioned is the state when the KubernetesCluster
+	// is ready.
 	KubernetesClusterPhaseProvisioned KubernetesClusterPhase = "Provisioned"
 
-	// KubernetesClusterPhaseDeleting is when the machine pod is being deleted
-	KubernetesClusterPhaseDeleting KubernetesClusterPhase = "Deleting"
-
-	// KubernetesClusterPhaseFailed is when a failure has occurred
+	// KubernetesClusterPhaseFailed is the state when the system might require
+	// manual intervention
 	KubernetesClusterPhaseFailed KubernetesClusterPhase = "Failed"
+
+	// KubernetesClusterPhaseDeleting is the state when a delete request has
+	// been sent to the API Server.
+	KubernetesClusterPhaseDeleting KubernetesClusterPhase = "Deleting"
 )
 
-// SetErrorReason sets the KubernetesMachine failure reason
-func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
+// SetErrorReason sets the KubernetesCluster error reason.
+func (s *KubernetesClusterStatus) SetErrorReason(v capierrors.ClusterStatusError) {
 	s.ErrorReason = &v
 }
 
-// SetErrorMessage sets the KubernetesMachine failure message
-func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
+// SetErrorMessage sets the KubernetesCluster error message.
+func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
 	s.ErrorMessage = pointer.StringPtr(v.Error())
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
-// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesCluster status such as Provisioning/Provisioned/Failed etc."
+// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesCluster status"
 // +kubebuilder:printcolumn:name="host",type="string",JSONPath=".status.apiEndpoints[0].host",description="Endpoint host for reaching the control plane"
 // +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".status.apiEndpoints[0].port",description="Endpoint port for reaching the control plane"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// KubernetesCluster is the Schema for the kubernetesclusters API
+// KubernetesCluster is the Schema for the kubernetesclusters API.
 type KubernetesCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -128,7 +131,7 @@ type KubernetesCluster struct {
 
 // +kubebuilder:object:root=true
 
-// KubernetesClusterList contains a list of KubernetesCluster
+// KubernetesClusterList contains a list of KubernetesCluster.
 type KubernetesClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

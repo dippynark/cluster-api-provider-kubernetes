@@ -92,12 +92,12 @@ const (
 )
 
 // SetErrorReason sets the KubernetesCluster failure reason
-func (s *KubernetesClusterStatus) SetErrorReason(v capierrors.ClusterStatusError) {
+func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
 	s.ErrorReason = &v
 }
 
 // SetErrorMessage sets the KubernetesCluster failure message
-func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
+func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
 	s.ErrorMessage = pointer.StringPtr(v.Error())
 }
 
