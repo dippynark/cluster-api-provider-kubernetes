@@ -60,9 +60,9 @@ type KubernetesClusterReconciler struct {
 
 func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	ctx := context.Background()
-	log := log.Log.WithName(clusterControllerName).WithValues("kubernetes-cluster", req.NamespacedName)
+	log := log.Log.WithValues(namespaceLogName, req.Namespace, kubernetesClusterLogName, req.Name)
 
-	// Fetch the KubernetesCluster instance
+	// Fetch the kubernetes cluster instance
 	kubernetesCluster := &capkv1.KubernetesCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, kubernetesCluster); err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -76,7 +76,7 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	// Always attempt to Patch the KubernetesCluster object and status after each reconciliation.
+	// Always attempt to patch the kubernetes cluster object and status after each reconciliation
 	defer func() {
 		r.reconcilePhase(kubernetesCluster)
 
@@ -88,7 +88,7 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		}
 	}()
 
-	// Fetch the Cluster.
+	// Fetch the cluster
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, kubernetesCluster.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -98,7 +98,7 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("cluster", cluster.Name)
+	log = log.WithValues(clusterLogName, cluster.Name)
 
 	// Handle deleted clusters
 	if !kubernetesCluster.DeletionTimestamp.IsZero() {
@@ -136,14 +136,15 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 		r.Log.Error(errors.Errorf("expected a Service but got a %T", o.Object), "failed to get KubernetesCluster for Service")
 		return nil
 	}
-	log := r.Log.WithValues("Service", s.Name, "Namespace", s.Namespace)
+	log := r.Log.WithValues(namespaceLogName, s.Namespace, serviceLogName, s.Name)
 
-	// Only watch services owned by a kubernetescluster
+	// Only watch services owned by a kubernetes clusters
 	ref := metav1.GetControllerOf(s)
 	if ref == nil || (ref.Kind != "KubernetesCluster" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
-	log.Info(fmt.Sprintf("Found Service owned by KubernetesCluster %s/%s", s.Namespace, ref.Name))
+	log = log.WithValues(kubernetesClusterLogName, ref.Name)
+	log.Info("Found Service owned by KubernetesCluster")
 	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
 	result = append(result, ctrl.Request{NamespacedName: name})
 
@@ -152,12 +153,14 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 }
 
 func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
-	// If the KubernetesCluster doesn't have finalizer, add it.
+	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, kubernetesClusterLogName, kubernetesCluster.Name)
+
+	// If the kubernetes cluster does not have finalizer, add it.
 	if !util.Contains(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer) {
 		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer)
 	}
 
-	// If the KubernetesCluster doesn't have foregroundDeletion, add it.
+	// If the kubernetes cluster does not have the foregroundDeletion finalizer, add it
 	if !util.Contains(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents) {
 		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents)
 	}
@@ -169,7 +172,15 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		// TODO: if service is being recreated, request same ip as was originally aquired
+		if kubernetesCluster.Status.ServiceName != nil {
+			// Service was previously created so something has deleted it
+			// Since any existing machines depend on this endpoint being fixed
+			// we cannot recreate
+			// TODO: use hostname and dns or attempt to aquire same service ip
+			kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
+			kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service %s cannot be found", clusterService.Name))
+			return ctrl.Result{}, nil
+		}
 		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
@@ -179,8 +190,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
 		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Cluster Service is not controlled by KubernetesCluster"))
-		return ctrl.Result{}, errors.Errorf("expected Service %s in Namespace %s to be controlled by KubernetesCluster %s", clusterService.Name, clusterService.Namespace, kubernetesCluster.Name)
+		err := errors.Errorf("expected Service %s to be controlled by KubernetesCluster", clusterService.Name)
+		kubernetesCluster.Status.SetErrorMessage(err)
+		return ctrl.Result{}, err
 	}
 
 	// Service has been created so update KubernetesCluster service name
@@ -190,10 +202,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Check service name matches status
-	// This should never not happen
 	if clusterService.Name != *kubernetesCluster.Status.ServiceName {
 		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Machine Pod name has changed"))
+		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service name %s has changed from %s", clusterService.Name, *kubernetesCluster.Status.ServiceName))
 		return ctrl.Result{}, nil
 	}
 
@@ -209,7 +220,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		// TODO: consider all elements of ingress array
 		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
-			r.Log.Info("Waiting for loadbalancer to be provisioned")
+			log.Info("Waiting for load balancer to be provisioned")
 			return ctrl.Result{}, nil
 		}
 		loadBalancerHost := clusterService.Status.LoadBalancer.Ingress[0].Hostname
@@ -217,7 +228,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 			loadBalancerHost = clusterService.Status.LoadBalancer.Ingress[0].IP
 		}
 		if loadBalancerHost == "" {
-			r.Log.Info("Waiting for loadbalancer hostname or IP")
+			log.Info("Waiting for load balancer hostname or IP address")
 			return ctrl.Result{}, nil
 		}
 		host = loadBalancerHost

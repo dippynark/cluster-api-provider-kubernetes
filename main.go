@@ -71,7 +71,7 @@ func main() {
 
 	if err = (&controllers.KubernetesClusterReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("KubernetesCluster"),
+		Log:    ctrl.Log.WithName("controller").WithName("KubernetesCluster"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "KubernetesCluster")
@@ -90,7 +90,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		CoreV1Client: coreV1Client,
 		Config:       config,
-		Log:          ctrl.Log.WithName("controllers").WithName("KubernetesMachine"),
+		Log:          ctrl.Log.WithName("controller").WithName("KubernetesMachine"),
 		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "KubernetesMachine")
