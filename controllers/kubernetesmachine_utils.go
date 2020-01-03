@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
+	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -131,6 +133,29 @@ func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *cluster
 	}
 
 	return cloudInitScriptSecret, nil
+}
+
+func (r *KubernetesMachineReconciler) kindContainerExec(machinePod *corev1.Pod, command string, args ...string) error {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePod.Name, machinePod.Namespace, kindContainerName)
+	machinePodKindCmd := machinePodKindCmder.Command(command, args...)
+	machinePodKindCmd.SetStdout(stdout)
+	machinePodKindCmd.SetStderr(stderr)
+
+	err := machinePodKindCmd.Run()
+	if err != nil {
+		if stderr.String() != "" {
+			return errors.Errorf("Exec stderr: %s", stderr.String())
+		}
+		return errors.Errorf("Exec stdout: %s", stdout.String())
+	}
+	if stdout.String() != "" {
+		log := r.Log.WithValues(namespaceLogName, machinePod.Namespace, podLogName, machinePod.Name)
+		log.Info(fmt.Sprintf("Exec stdout: %s", stdout.String()))
+	}
+
+	return nil
 }
 
 func setVolumeMount(kindContainer *corev1.Container, name, mountPath, subPath string, readOnly bool) {

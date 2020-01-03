@@ -16,14 +16,12 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
 	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
-	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -45,35 +43,36 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
-	machineControllerName               = "KubernetesMachine-controller"
-	enableBootstrapProcessRequeuePeriod = time.Second * 5
-	setNodeProviderIDRequeuePeriod      = time.Second * 5
-	defaultImageName                    = "kindest/node"
-	defaultImageTag                     = "v1.17.0"
-	kindContainerName                   = "kind"
-	defaultAPIServerPort                = 6443
-	libModulesVolumeName                = "lib-modules"
-	libModulesVolumeMountPath           = "/lib/modules"
-	runVolumeName                       = "run"
-	runVolumeMountPath                  = "/run"
-	tmpVolumeName                       = "tmp"
-	tmpVolumeMountPath                  = "/tmp"
-	varLibVolumeName                    = "var-lib"
-	varLibVolumeMountPath               = "/var/lib"
-	varLogVolumeName                    = "var-log"
-	varLogVolumeMountPath               = "/var/log"
-	cloudInitScriptsVolumeName          = "cloud-init-scripts"
-	cloudInitScriptsVolumeMountPath     = "/opt/cloud-init"
-	cloudInitSystemdUnitsVolume         = "cloud-init-systemd-units"
-	etcSystemdSystem                    = "/etc/systemd/system"
-	cloudInitBootstrapScriptName        = "bootstrap.sh"
-	cloudInitInstallScriptName          = "install.sh"
-	cloudInitInstallScript              = `#!/bin/bash
+	machineControllerName              = "KubernetesMachine-controller"
+	enableBootstrapProcessRequeueAfter = time.Second * 5
+	setNodeProviderIDRequeueAfter      = time.Second * 5
+	defaultImageName                   = "kindest/node"
+	defaultImageTag                    = "v1.17.0"
+	kindContainerName                  = "kind"
+	defaultAPIServerPort               = 6443
+	libModulesVolumeName               = "lib-modules"
+	libModulesVolumeMountPath          = "/lib/modules"
+	runVolumeName                      = "run"
+	runVolumeMountPath                 = "/run"
+	tmpVolumeName                      = "tmp"
+	tmpVolumeMountPath                 = "/tmp"
+	varLibVolumeName                   = "var-lib"
+	varLibVolumeMountPath              = "/var/lib"
+	varLogVolumeName                   = "var-log"
+	varLogVolumeMountPath              = "/var/log"
+	cloudInitScriptsVolumeName         = "cloud-init-scripts"
+	cloudInitScriptsVolumeMountPath    = "/opt/cloud-init"
+	cloudInitSystemdUnitsVolume        = "cloud-init-systemd-units"
+	etcSystemdSystem                   = "/etc/systemd/system"
+	cloudInitBootstrapScriptName       = "bootstrap.sh"
+	cloudInitInstallScriptName         = "install.sh"
+	cloudInitInstallScript             = `#!/bin/bash
 
 set -o errexit
 set -o nounset
@@ -121,7 +120,7 @@ type KubernetesMachineReconciler struct {
 func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	// TODO: what does ctx do
 	ctx := context.Background()
-	log := r.Log.WithName(machineControllerName).WithValues("kubernetes-machine", req.NamespacedName)
+	log := log.Log.WithValues(namespaceLogName, req.Namespace, kubernetesMachineLogName, req.Name)
 
 	// Fetch the KubernetesMachine instance.
 	kubernetesMachine := &capkv1.KubernetesMachine{}
@@ -159,7 +158,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("machine", machine.Name)
+	log = log.WithValues(machineLogName, machine.Name)
 
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
@@ -172,7 +171,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("cluster", cluster.Name)
+	log = log.WithValues(clusterLogName, cluster.Name)
 
 	// Fetch the Kubernetes Cluster.
 	kubernetesCluster := &capkv1.KubernetesCluster{}
@@ -185,7 +184,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("kubernetes-cluster", kubernetesCluster.Name)
+	log = log.WithValues(kubernetesClusterLogName, kubernetesCluster.Name)
 
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -248,7 +247,7 @@ func (r *KubernetesMachineReconciler) KubernetesClusterToKubernetesMachines(o ha
 		r.Log.Error(errors.Errorf("expected a KubernetesCluster but got a %T", o.Object), "failed to get KubernetesMachine for KubernetesCluster")
 		return nil
 	}
-	log := r.Log.WithValues("KubernetesCluster", c.Name, "Namespace", c.Namespace)
+	log := r.Log.WithValues(namespaceLogName, c.Namespace, clusterLogName, c.Name)
 
 	cluster, err := util.GetOwnerCluster(context.TODO(), r.Client, c.ObjectMeta)
 	switch {
@@ -280,20 +279,21 @@ func (r *KubernetesMachineReconciler) KubernetesClusterToKubernetesMachines(o ha
 // requests for reconciliation of KubernetesMachines
 func (r *KubernetesMachineReconciler) PodToKubernetesMachine(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-	s, ok := o.Object.(*corev1.Pod)
+	p, ok := o.Object.(*corev1.Pod)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a Pod but got a %T", o.Object), "failed to get KubernetesMachine for Pod")
 		return nil
 	}
-	log := r.Log.WithValues("Pod", s.Name, "Namespace", s.Namespace)
+	log := r.Log.WithValues(namespaceLogName, p.Namespace, podLogName, p.Name)
 
 	// Only watch pods owned by a kubernetesmachine
-	ref := metav1.GetControllerOf(s)
+	ref := metav1.GetControllerOf(p)
 	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
-	log.Info(fmt.Sprintf("Found Pod owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
-	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
+	log = log.WithValues(kubernetesMachineLogName, ref.Name)
+	log.Info("Found Pod owned by KubernetesMachine")
+	name := client.ObjectKey{Namespace: p.Namespace, Name: ref.Name}
 	result = append(result, ctrl.Request{NamespacedName: name})
 
 	return result
@@ -308,14 +308,15 @@ func (r *KubernetesMachineReconciler) SecretToKubernetesMachine(o handler.MapObj
 		r.Log.Error(errors.Errorf("expected a Secret but got a %T", o.Object), "failed to get KubernetesMachine for Secret")
 		return nil
 	}
-	log := r.Log.WithValues("Secret", s.Name, "Namespace", s.Namespace)
+	log := r.Log.WithValues(namespaceLogName, s.Namespace, secretLogName, s.Name)
 
 	// Only watch secrets owned by a kubernetesmachine
 	ref := metav1.GetControllerOf(s)
 	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
-	log.Info(fmt.Sprintf("Found Secret owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
+	log = log.WithValues(kubernetesMachineLogName, ref.Name)
+	log.Info("Found Secret owned by KubernetesMachine")
 	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
 	result = append(result, ctrl.Request{NamespacedName: name})
 
@@ -326,26 +327,29 @@ func (r *KubernetesMachineReconciler) SecretToKubernetesMachine(o handler.MapObj
 // requests for reconciliation of KubernetesMachines
 func (r *KubernetesMachineReconciler) PersistentVolumeClaimToKubernetesMachine(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-	s, ok := o.Object.(*corev1.PersistentVolumeClaim)
+	p, ok := o.Object.(*corev1.PersistentVolumeClaim)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a PersistentVolumeClaim but got a %T", o.Object), "failed to get KubernetesMachine for Secret")
 		return nil
 	}
-	log := r.Log.WithValues("PersistentVolumeClaim", s.Name, "Namespace", s.Namespace)
+	log := r.Log.WithValues(namespaceLogName, p.Namespace, persistentVolumeClaimLogName, p.Name)
 
 	// Only watch persistentvolumeclaim owned by a kubernetesmachine
-	ref := metav1.GetControllerOf(s)
+	ref := metav1.GetControllerOf(p)
 	if ref == nil || (ref.Kind != "KubernetesMachine" || ref.APIVersion != capkv1.GroupVersion.String()) {
 		return nil
 	}
-	log.Info(fmt.Sprintf("Found PersistentVolumeClaim owned by KubernetesMachine %s/%s", s.Namespace, ref.Name))
-	name := client.ObjectKey{Namespace: s.Namespace, Name: ref.Name}
+	log = log.WithValues(kubernetesMachineLogName, ref.Name)
+	log.Info("Found PersistentVolumeClaim owned by KubernetesMachine")
+	name := client.ObjectKey{Namespace: p.Namespace, Name: ref.Name}
 	result = append(result, ctrl.Request{NamespacedName: name})
 
 	return result
 }
 
 func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, machineLogName, machine.Name, kubernetesClusterLogName, kubernetesMachine.Name)
+
 	// If the kubernetesMachine is in an error state, return early
 	if kubernetesMachine.Status.ErrorReason != nil || kubernetesMachine.Status.ErrorMessage != nil {
 		return reconcile.Result{}, nil
@@ -363,7 +367,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Make sure bootstrap data is available and populated.
 	if machine.Spec.Bootstrap.Data == nil {
-		r.Log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+		log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
 		return ctrl.Result{}, nil
 	}
 
@@ -388,6 +392,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	log = log.WithValues(podLogName, machinePod.Name)
 
 	// Ensure machine pod is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(machinePod); ref == nil || ref.UID != kubernetesMachine.UID {
@@ -447,7 +453,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Check status of kind container
 	kindContainerStatus, exists := utils.GetContainerStatus(machinePod.Status.ContainerStatuses, kindContainerName)
 	if !exists {
-		r.Log.Info("Waiting for kind container status")
+		log.Info("Waiting for kind container status")
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Terminated != nil {
@@ -457,13 +463,13 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Running == nil {
-		r.Log.Info("Waiting for kind container to be running")
+		log.Info("Waiting for kind container to be running")
 		return ctrl.Result{}, nil
 	}
 
 	// Enable bootstrap process
-	if err := r.enableBoostrapProcess(cluster, machine, machinePod); err != nil {
-		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeuePeriod}, errors.Wrap(err, "failed to enable bootstrap process")
+	if err := r.enableBoostrapProcess(machinePod); err != nil {
+		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeueAfter}, errors.Wrap(err, "failed to enable bootstrap process")
 	}
 
 	// If the machine has already been provisioned, return
@@ -474,14 +480,14 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Check kind container is ready before attempting to set providerID
 	if !kindContainerStatus.Ready {
-		r.Log.Info("Waiting for kind container to be ready")
+		log.Info("Waiting for kind container to be ready")
 		return ctrl.Result{}, nil
 	}
 
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
 	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
-		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeuePeriod}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
+		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeueAfter}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
 
 	// Set ProviderID so the Cluster API Machine Controller can pull it
@@ -491,7 +497,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Check Machine Pod is ready before marking kubernetesMachine ready
 	// TODO: do we need this for worker Nodes?
 	if !utils.IsPodReady(machinePod) {
-		r.Log.Info("Waiting for machine Pod to be ready")
+		log.Info("Waiting for machine Pod to be ready")
 		return ctrl.Result{}, nil
 	}
 
@@ -520,7 +526,7 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 			}
 			// Ensure machine pod is controlled by kubernetes machine
 			if ref := metav1.GetControllerOf(machinePod); ref != nil && ref.UID == kubernetesMachine.UID {
-				if err := r.kubeadmReset(cluster, machine); err != nil {
+				if err := r.kubeadmReset(machinePod); err != nil {
 					// TODO: if this happens too much should we raise a failure?
 					return ctrl.Result{}, errors.Wrap(err, "failed to execute kubeadm reset")
 				}
@@ -575,39 +581,24 @@ func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine
 	}
 }
 
-func (r *KubernetesMachineReconciler) enableBoostrapProcess(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
-
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePodName(cluster, machine), machine.Namespace, kindContainerName)
-	machinePodKindCmd := machinePodKindCmder.Command(path.Join(cloudInitScriptsVolumeMountPath, cloudInitInstallScriptName))
-	machinePodKindCmd.SetStdout(stdout)
-	machinePodKindCmd.SetStderr(stderr)
-
-	r.Log.Info("Enabling bootstrap process")
-	err := machinePodKindCmd.Run()
-	if err != nil {
-		if stderr.String() != "" {
-			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePodName(cluster, machine), machine.Namespace, stderr.String())
-		}
-		return errors.Errorf("Pod %s/%s exec stdout: %s", machinePodName(cluster, machine), machine.Namespace, stdout.String())
-	}
-	r.Log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePodName(cluster, machine), machine.Namespace, stdout.String()))
-
-	return nil
+func (r *KubernetesMachineReconciler) enableBoostrapProcess(machinePod *corev1.Pod) error {
+	log := r.Log.WithValues(namespaceLogName, machinePod.Namespace, podLogName, machinePod.Name)
+	log.Info("Enabling bootstrap process")
+	return r.kindContainerExec(machinePod, path.Join(cloudInitScriptsVolumeMountPath, cloudInitInstallScriptName))
 }
 
 func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
+	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, machineLogName, machine.Name, podLogName, machinePod.Name)
 
 	// Find controller pod
+	log.Info("Finding controller Pod")
 	labels := map[string]string{
 		clusterv1.MachineClusterLabelName:      cluster.Name,
 		clusterv1.MachineControlPlaneLabelName: "true",
 	}
 	podList := &corev1.PodList{}
 	if err := r.Client.List(context.TODO(), podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
-		r.Log.Error(err, fmt.Sprintf("failed to list controller Pods for Cluster %s/%s", cluster.Namespace, cluster.Name))
-		return err
+		return errors.Wrap(err, "failed to list controller Pods for Cluster")
 	}
 	if len(podList.Items) == 0 {
 		return errors.New("Unable to find controller Pod for Cluster")
@@ -615,54 +606,19 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 	// TODO: consider other controller pods
 	controllerPod := podList.Items[0]
 
-	r.Log.Info("Setting node provider ID")
-	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, controllerPod.Name, machine.Namespace, "kind")
-
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	machinePodKindCmd := machinePodKindCmder.Command("kubectl",
+	log.Info("Setting Node provider ID")
+	return r.kindContainerExec(&controllerPod, "kubectl",
 		"--kubeconfig", "/etc/kubernetes/admin.conf",
 		"patch",
 		"node", machinePodName(cluster, machine),
 		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID(cluster, machine)))
-	machinePodKindCmd.SetStdout(stdout)
-	machinePodKindCmd.SetStderr(stderr)
-
-	err := machinePodKindCmd.Run()
-	if err != nil {
-		if stderr.String() != "" {
-			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePod.Name, machinePod.Namespace, stderr.String())
-		}
-		return errors.Errorf("Pod %s/%s exec stdout: %s", machinePod.Name, machinePod.Namespace, stdout.String())
-	}
-	r.Log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePod.Name, machinePod.Namespace, stdout.String()))
-
-	return nil
 }
 
 // kubeadmReset will run `kubeadm reset` on the machine
-func (r *KubernetesMachineReconciler) kubeadmReset(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	machinePodKindCmder := pod.ContainerCmder(r.CoreV1Client, r.Config, machinePodName(cluster, machine), machine.Namespace, "kind")
-	machinePodKindCmd := machinePodKindCmder.Command("kubeadm",
-		"reset",
-		"--force")
-	machinePodKindCmd.SetStdout(stdout)
-	machinePodKindCmd.SetStderr(stderr)
-
-	r.Log.Info("Running kubeadm reset on the machine")
-	err := machinePodKindCmd.Run()
-	if err != nil {
-		if stderr.String() != "" {
-			return errors.Errorf("Pod %s/%s exec stderr: %s", machinePodName(cluster, machine), machine.Namespace, stderr.String())
-		}
-		return errors.Errorf("Pod %s/%s exec stdout: %s", machinePodName(cluster, machine), machine.Namespace, stdout.String())
-	}
-	r.Log.Info(fmt.Sprintf("Pod %s/%s exec stdout: %s", machinePodName(cluster, machine), machine.Namespace, stdout.String()))
-
-	return nil
+func (r *KubernetesMachineReconciler) kubeadmReset(machinePod *corev1.Pod) error {
+	log := r.Log.WithValues(namespaceLogName, machinePod.Namespace, podLogName, machinePod.Name)
+	log.Info("Running kubeadm reset")
+	return r.kindContainerExec(machinePod, "kubeadm", "reset", "--force")
 }
 
 func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
