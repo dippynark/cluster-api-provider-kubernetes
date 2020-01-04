@@ -475,12 +475,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeueAfter}, errors.Wrap(err, "failed to enable bootstrap process")
 	}
 
-	// If the machine has already been provisioned, return
-	// TODO: this shouldn't change, but should we set it again just in case?
-	if kubernetesMachine.Spec.ProviderID != nil {
-		return ctrl.Result{}, nil
-	}
-
 	// Check kind container is ready before attempting to set providerID
 	if !kindContainerStatus.Ready {
 		log.Info("Waiting for kind container to be ready")
