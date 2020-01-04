@@ -108,7 +108,6 @@ const (
 // +kubebuilder:resource:categories=cluster-api
 // +kubebuilder:printcolumn:name="provider-id",type="string",JSONPath=".spec.providerID",description="Provider ID"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesMachine status"
-// +kubebuilder:printcolumn:name="pod-name",type="string",JSONPath=".status.podName",description="The name of the Pod corresponding to the KubernetesMachine"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // KubernetesMachine is the Schema for the kubernetesmachines API.
