@@ -18,6 +18,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	"github.com/go-logr/logr"
@@ -41,9 +42,10 @@ import (
 )
 
 const (
-	clusterControllerName   = "KubernetesCluster-controller"
-	apiServerPortName       = "kube-apiserver"
-	clusterLoadBalancerPort = 443
+	clusterControllerName           = "KubernetesCluster-controller"
+	apiServerPortName               = "kube-apiserver"
+	loadBalancerIngressRequeueAfter = time.Second * 1
+	clusterLoadBalancerPort         = 443
 )
 
 // KubernetesClusterReconciler reconciles a KubernetesCluster object
@@ -177,10 +179,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		if kubernetesCluster.Status.ServiceName != nil {
+		if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != "" || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != 0 {
 			// Service was previously created so something has deleted it
-			// Since any existing machines depend on this endpoint being fixed
-			// we cannot recreate
+			// Since any existing machines depend on this endpoint being fixed we cannot recreate
 			// TODO: use hostname and dns or attempt to aquire same service ip
 			kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
 			kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service %s cannot be found", clusterService.Name))
@@ -200,16 +201,36 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, err
 	}
 
-	// Service has been created so update KubernetesCluster service name
-	if kubernetesCluster.Status.ServiceName == nil {
-		kubernetesCluster.Status.ServiceName = &clusterService.Name
+	// Retrieve service host
+	host := clusterService.Spec.ClusterIP
+	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		// TODO: consider all elements of ingress array
+		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
+			log.Info("Waiting for load balancer to be provisioned")
+			return ctrl.Result{RequeueAfter: loadBalancerIngressRequeueAfter}, nil
+		}
+		loadBalancerHost := clusterService.Status.LoadBalancer.Ingress[0].Hostname
+		if loadBalancerHost == "" {
+			loadBalancerHost = clusterService.Status.LoadBalancer.Ingress[0].IP
+		}
+		if loadBalancerHost == "" {
+			log.Info("Waiting for load balancer hostname or IP address")
+			return ctrl.Result{RequeueAfter: loadBalancerIngressRequeueAfter}, nil
+		}
+		host = loadBalancerHost
+	}
+
+	// Set controlPlaneEndpoint host and port
+	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host == "" && kubernetesCluster.Spec.ControlPlaneEndpoint.Port == 0 {
+		kubernetesCluster.Spec.ControlPlaneEndpoint.Host = host
+		kubernetesCluster.Spec.ControlPlaneEndpoint.Port = clusterLoadBalancerPort
 		return ctrl.Result{}, nil
 	}
 
-	// Check service name matches status
-	if clusterService.Name != *kubernetesCluster.Status.ServiceName {
+	// Make sure endpoint has not changed
+	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != host || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != clusterLoadBalancerPort {
 		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service name %s has changed from %s", clusterService.Name, *kubernetesCluster.Status.ServiceName))
+		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service endpoint has changed"))
 		return ctrl.Result{}, nil
 	}
 
@@ -220,28 +241,11 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
-	// Set api endpoint with load balancer details so the Cluster API Cluster Controller can pull it
-	host := clusterService.Spec.ClusterIP
-	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
-		// TODO: consider all elements of ingress array
-		if len(clusterService.Status.LoadBalancer.Ingress) == 0 {
-			log.Info("Waiting for load balancer to be provisioned")
-			return ctrl.Result{}, nil
-		}
-		loadBalancerHost := clusterService.Status.LoadBalancer.Ingress[0].Hostname
-		if loadBalancerHost == "" {
-			loadBalancerHost = clusterService.Status.LoadBalancer.Ingress[0].IP
-		}
-		if loadBalancerHost == "" {
-			log.Info("Waiting for load balancer hostname or IP address")
-			return ctrl.Result{}, nil
-		}
-		host = loadBalancerHost
-	}
+	// Copy controlPlaneEndpoint to status so the Cluster API Cluster Controller can pull it
 	kubernetesCluster.Status.APIEndpoints = []capkv1.APIEndpoint{
 		{
-			Host: host,
-			Port: clusterLoadBalancerPort,
+			Host: kubernetesCluster.Spec.ControlPlaneEndpoint.Host,
+			Port: kubernetesCluster.Spec.ControlPlaneEndpoint.Port,
 		},
 	}
 
@@ -261,13 +265,8 @@ func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.
 }
 
 func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster) {
-	// Set phase to "Pending" if nil
+	// Set phase to "Provisioning" if nil
 	if k.Status.Phase == "" {
-		k.Status.Phase = capkv1.KubernetesClusterPhasePending
-	}
-
-	// Set phase to "Provisioning" if the corresponding Service has been created
-	if k.Status.ServiceName != nil {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioning
 	}
 

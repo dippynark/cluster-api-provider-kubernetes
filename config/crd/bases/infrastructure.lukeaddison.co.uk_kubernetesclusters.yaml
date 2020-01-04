@@ -52,6 +52,21 @@ spec:
         spec:
           description: KubernetesClusterSpec defines the desired state of KubernetesCluster
           properties:
+            controlPlaneEndpoint:
+              description: ControlPlaneEndpoint represents the endpoint used to communicate
+                with the control plane.
+              properties:
+                host:
+                  description: Host is the hostname on which the API Server is serving.
+                  type: string
+                port:
+                  description: Port is the port on which the API Server is serving.
+                  format: int32
+                  type: integer
+              required:
+              - host
+              - port
+              type: object
             controlPlaneServiceType:
               description: ControlPlaneServiceType is the type of Service used for
                 the control plane load balancer.
@@ -98,10 +113,6 @@ spec:
             ready:
               description: Ready denotes that the KubernetesCluster is ready.
               type: boolean
-            serviceName:
-              description: ServiceName is the name of the Service corresponding to
-                the KubernetesCluster.
-              type: string
           type: object
       type: object
   version: v1alpha1

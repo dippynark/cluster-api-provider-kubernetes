@@ -37,6 +37,10 @@ type KubernetesClusterSpec struct {
 	// +kubebuilder:validation:Enum=ClusterIP;LoadBalancer
 	ControlPlaneServiceType corev1.ServiceType `json:"controlPlaneServiceType,omitempty"`
 	// TODO: default to ClusterIP
+
+	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+	// +optional
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 }
 
 // KubernetesClusterStatus defines the observed state of a KubernetesCluster.
@@ -65,11 +69,6 @@ type KubernetesClusterStatus struct {
 	// plane.
 	// +optional
 	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
-
-	// ServiceName is the name of the Service corresponding to the
-	// KubernetesCluster.
-	// +optional
-	ServiceName *string `json:"serviceName,omitempty"`
 }
 
 // SetErrorReason sets the KubernetesCluster error reason.
@@ -87,12 +86,8 @@ type KubernetesClusterPhase string
 
 // These are the valid statuses of KubernetesClusters.
 const (
-	// KubernetesClusterPhasePending is the first state a KubernetesCluster is
+	// KubernetesClusterPhaseProvisioning is the first state a KubernetesCluster is
 	// assigned after being created.
-	KubernetesClusterPhasePending KubernetesClusterPhase = "Pending"
-
-	// KubernetesClusterPhaseProvisioning is the state when the control plane
-	// Service has been created.
 	KubernetesClusterPhaseProvisioning KubernetesClusterPhase = "Provisioning"
 
 	// KubernetesClusterPhaseProvisioned is the state when the KubernetesCluster
