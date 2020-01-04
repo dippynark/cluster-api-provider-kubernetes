@@ -179,6 +179,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
+		// TODO: attempt to recreate and aquire same controlPlaneEndpoint host
 		if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != "" || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != 0 {
 			// Service was previously created so something has deleted it
 			// Since any existing machines depend on this endpoint being fixed we cannot recreate
