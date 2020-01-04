@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
 	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
@@ -16,6 +17,10 @@ import (
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+)
+
+const (
+	providerIDPrefix = "kubernetes://"
 )
 
 func (r *KubernetesMachineReconciler) getPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) (map[string]corev1.PersistentVolumeClaim, error) {
@@ -199,9 +204,26 @@ func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) stri
 	return fmt.Sprintf("%s-%s", cluster.Name, machine.Name)
 }
 
-func providerID(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
+func machinePodNodeName(machinePod *corev1.Pod) string {
+	if machinePod.Spec.Hostname != "" {
+		return machinePod.Spec.Hostname
+	}
+	return machinePod.Name
+}
+
+func getProviderIDFromPod(machinePod *corev1.Pod) (string, error) {
+	if machinePod == nil {
+		return "", errors.New("Machine Pod is nil")
+	}
+	if machinePod.UID == "" {
+		return "", errors.New("Machine Pod UID is empty")
+	}
 	// TODO: is there some more standard format for this?
-	return fmt.Sprintf("kubernetes://%s/%s/%s", cluster.Namespace, cluster.Name, machine.Name)
+	return providerIDPrefix + string(machinePod.UID), nil
+}
+
+func getPodUIDFromProviderID(providerID string) string {
+	return strings.TrimPrefix(providerID, providerIDPrefix)
 }
 
 func kubeconfigSecretName(cluster *clusterv1.Cluster) string {

@@ -3869,7 +3869,7 @@ spec:
                 or zero if there is no default.
               type: string
             providerID:
-              description: ProviderID is in the form `kubernetes://<namespace>/<clusterName>/<machineName>`.
+              description: ProviderID is in the form `kubernetes://<podUID>`.
               type: string
             readinessGates:
               description: 'If specified, all readiness gates will be evaluated for
@@ -5590,9 +5590,6 @@ spec:
             phase:
               description: Phase represents the current phase of KubernetesMachine
                 actuation.
-              type: string
-            podName:
-              description: PodName is the name of the Pod corresponding to the KubernetesMachine.
               type: string
             ready:
               description: Ready denotes that the KubernetesMachine is ready.

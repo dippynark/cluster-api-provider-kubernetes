@@ -378,8 +378,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      machinePodName(cluster, machine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		// TODO: should we use the existence of the providerID instead?
-		if kubernetesMachine.Status.PodName != nil {
+		if kubernetesMachine.Spec.ProviderID != nil {
 			// Machine pod was previous created so something has deleted it
 			// This could be due to the Node it was running on failing (for example)
 			// We rely on a higher level object for recreation
@@ -402,17 +401,21 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 
-	// Machine Pod has been created so update KubernetesMachine pod name
-	if kubernetesMachine.Status.PodName == nil {
-		kubernetesMachine.Status.PodName = &machinePod.Name
+	// Machine Pod has been created so update the providerID so the Cluster API Machine Controller
+	// can pull it
+	if kubernetesMachine.Spec.ProviderID == nil {
+		providerID, err := getProviderIDFromPod(machinePod)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		kubernetesMachine.Spec.ProviderID = &providerID
 		return ctrl.Result{}, nil
 	}
 
-	// Check machine pod name matches status
-	// This should never not happen
-	if machinePod.Name != *kubernetesMachine.Status.PodName {
+	// Make sure machine pod uid and providerID match
+	if getPodUIDFromProviderID(*kubernetesMachine.Spec.ProviderID) != string(machinePod.UID) {
 		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod name has changed"))
+		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod UID has changed"))
 		return ctrl.Result{}, nil
 	}
 
@@ -486,13 +489,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
-	if err := r.setNodeProviderID(cluster, machine, machinePod); err != nil {
+	if err := r.setNodeProviderID(cluster, machinePod); err != nil {
 		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeueAfter}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
-
-	// Set ProviderID so the Cluster API Machine Controller can pull it
-	providerID := providerID(cluster, machine)
-	kubernetesMachine.Spec.ProviderID = &providerID
 
 	// Check Machine Pod is ready before marking kubernetesMachine ready
 	// TODO: do we need this for worker Nodes?
@@ -553,14 +552,9 @@ func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine
 		k.Status.Phase = capkv1.KubernetesMachinePhasePending
 	}
 
-	// Set phase to "Provisioning" if the corresponding Pod has been created
-	if k.Status.PodName != nil {
-		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioning
-	}
-
-	// Set phase to "Provisioned" if providerID has been set
+	// Set phase to "Provisioning" if the providerID has been set
 	if k.Spec.ProviderID != nil {
-		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioned
+		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioning
 	}
 
 	// Set phase to "Running" if providerID has been set and the
@@ -587,8 +581,8 @@ func (r *KubernetesMachineReconciler) enableBoostrapProcess(machinePod *corev1.P
 	return r.kindContainerExec(machinePod, path.Join(cloudInitScriptsVolumeMountPath, cloudInitInstallScriptName))
 }
 
-func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machinePod *corev1.Pod) error {
-	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, machineLogName, machine.Name, podLogName, machinePod.Name)
+func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machinePod *corev1.Pod) error {
+	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, podLogName, machinePod.Name)
 
 	// Find controller pod
 	log.Info("Finding controller Pod")
@@ -606,12 +600,16 @@ func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Clust
 	// TODO: consider other controller pods
 	controllerPod := podList.Items[0]
 
+	providerID, err := getProviderIDFromPod(machinePod)
+	if err != nil {
+		return err
+	}
 	log.Info("Setting Node provider ID")
 	return r.kindContainerExec(&controllerPod, "kubectl",
 		"--kubeconfig", "/etc/kubernetes/admin.conf",
 		"patch",
-		"node", machinePodName(cluster, machine),
-		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID(cluster, machine)))
+		"node", machinePodNodeName(machinePod),
+		"--patch", fmt.Sprintf(`{"spec": {"providerID": "%s"}}`, providerID))
 }
 
 // kubeadmReset will run `kubeadm reset` on the machine

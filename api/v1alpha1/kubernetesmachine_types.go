@@ -32,7 +32,7 @@ const (
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
 	// ProviderID is in the form
-	// `kubernetes://<namespace>/<clusterName>/<machineName>`.
+	// `kubernetes://<podUID>`.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 	// PodSpec forms the base of the Pod corresponding to the KubernetesMachine.
@@ -65,10 +65,6 @@ type KubernetesMachineStatus struct {
 	// Ready denotes that the KubernetesMachine is ready.
 	// +optional
 	Ready bool `json:"ready"`
-
-	// PodName is the name of the Pod corresponding to the KubernetesMachine.
-	// +optional
-	PodName *string `json:"podName,omitempty"`
 }
 
 // SetErrorReason sets the KubernetesMachine error reason.
@@ -90,13 +86,9 @@ const (
 	// assigned after being created.
 	KubernetesMachinePhasePending KubernetesMachinePhase = "Pending"
 
-	// KubernetesMachinePhaseProvisioning is the state when the corresponding
-	// Pod has been created.
-	KubernetesMachinePhaseProvisioning KubernetesMachinePhase = "Provisioning"
-
-	// KubernetesMachinePhaseProvisioned is the state when the ProviderID has
+	// KubernetesMachinePhaseProvisioning is the state when the ProviderID has
 	// been set.
-	KubernetesMachinePhaseProvisioned KubernetesMachinePhase = "Provisioned"
+	KubernetesMachinePhaseProvisioning KubernetesMachinePhase = "Provisioning"
 
 	// KubernetesMachinePhaseRunning is the state when the ProviderID has been
 	// set and the KubernetesMachine is ready.
