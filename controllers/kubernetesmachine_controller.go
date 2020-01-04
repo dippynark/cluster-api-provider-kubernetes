@@ -471,6 +471,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Enable bootstrap process
+	// TODO: if this has already been done, don't enable it again?
 	if err := r.enableBoostrapProcess(machinePod); err != nil {
 		return ctrl.Result{RequeueAfter: enableBootstrapProcessRequeueAfter}, errors.Wrap(err, "failed to enable bootstrap process")
 	}
@@ -483,6 +484,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
+	// TODO: if this has already been done, don't set it again?
 	if err := r.setNodeProviderID(cluster, machinePod); err != nil {
 		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeueAfter}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
