@@ -360,7 +360,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
 	}
 
-	// If the KubernetesMachine doesn't have foregroundDeletion, add it.
+	// If the KubernetesMachine doesn't have foregroundDeletion finalizer, add it.
 	if !util.Contains(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents) {
 		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents)
 	}
