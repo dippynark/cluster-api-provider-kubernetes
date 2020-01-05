@@ -82,6 +82,10 @@ func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
 }
 
 // KubernetesClusterPhase describes the state of a KuberntesCluster.
+//
+// This type is a high-level indicator of the status of the KuberntesCluster as it is provisioned,
+// from the API user’s perspective. The value should not be interpreted by any software components
+// as a reliable indication of the actual state of the KuberntesCluster.
 type KubernetesClusterPhase string
 
 // These are the valid statuses of KubernetesClusters.

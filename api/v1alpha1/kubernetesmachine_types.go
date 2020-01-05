@@ -78,6 +78,10 @@ func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
 }
 
 // KubernetesMachinePhase describes the state of a KubernetesMachine.
+//
+// This type is a high-level indicator of the status of the KuberntesMachine as it is provisioned,
+// from the API user’s perspective. The value should not be interpreted by any software components
+// as a reliable indication of the actual state of the KuberntesMachine.
 type KubernetesMachinePhase string
 
 // These are the valid statuses of KubernetesMachines.
