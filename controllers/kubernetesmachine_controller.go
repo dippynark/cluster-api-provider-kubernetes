@@ -188,7 +188,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(cluster, machine, kubernetesMachine)
+		return r.reconcileDelete(machine, kubernetesMachine)
 	}
 
 	// Make sure infrastructure is ready
@@ -375,7 +375,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	machinePod := &corev1.Pod{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{
 		Namespace: machine.Namespace,
-		Name:      machinePodName(cluster, machine),
+		Name:      machinePodName(kubernetesMachine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
 		if kubernetesMachine.Spec.ProviderID != nil {
@@ -503,7 +503,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) reconcileDelete(machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
 	if util.IsControlPlaneMachine(machine) && util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
@@ -511,7 +511,7 @@ func (r *KubernetesMachineReconciler) reconcileDelete(cluster *clusterv1.Cluster
 		machinePod := &corev1.Pod{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{
 			Namespace: machine.Namespace,
-			Name:      machinePodName(cluster, machine),
+			Name:      machinePodName(kubernetesMachine),
 		}, machinePod)
 		// Check we found a pod...
 		if !k8serrors.IsNotFound(err) {
@@ -624,7 +624,7 @@ func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluste
 
 func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
-	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
+	machinePod, err := r.getMachinePodBase(cluster, kubernetesMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -678,7 +678,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 
 func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
-	machinePod, err := r.getMachinePodBase(cluster, machine, kubernetesMachine)
+	machinePod, err := r.getMachinePodBase(cluster, kubernetesMachine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -695,12 +695,12 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
 }
 
-func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (*corev1.Pod, error) {
+func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, kubernetesMachine *capkv1.KubernetesMachine) (*corev1.Pod, error) {
 
 	machinePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePodName(cluster, machine),
-			Namespace: machine.Namespace,
+			Name:      machinePodName(kubernetesMachine),
+			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				clusterv1.MachineClusterLabelName: cluster.Name,
 			},
@@ -812,7 +812,7 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 			Name: cloudInitScriptsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: machinePodName(cluster, machine) + "-cloud-init",
+					SecretName: machinePodName(kubernetesMachine) + "-cloud-init",
 					Items: []corev1.KeyToPath{
 						{
 							Key:  cloudInitBootstrapScriptName,
@@ -834,7 +834,7 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 			Name: cloudInitSystemdUnitsVolume,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: machinePodName(cluster, machine) + "-cloud-init",
+					SecretName: machinePodName(kubernetesMachine) + "-cloud-init",
 					Items: []corev1.KeyToPath{
 						{
 							Key:  cloudInitSystemdServiceUnitName,

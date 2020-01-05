@@ -118,7 +118,7 @@ func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *cluster
 	// Create cloud-init secret
 	cloudInitScriptSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePodName(cluster, machine) + "-cloud-init",
+			Name:      machinePodName(kubernetesMachine) + "-cloud-init",
 			Namespace: machine.Namespace,
 			Labels: map[string]string{
 				clusterv1.MachineClusterLabelName: cluster.Name,
@@ -200,8 +200,8 @@ func machinePodImage(machine *clusterv1.Machine) string {
 	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
 }
 
-func machinePodName(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
-	return fmt.Sprintf("%s-%s", cluster.Name, machine.Name)
+func machinePodName(kubernetsMachine *infrav1.KubernetesMachine) string {
+	return kubernetsMachine.Name
 }
 
 func machinePodNodeName(machinePod *corev1.Pod) string {
