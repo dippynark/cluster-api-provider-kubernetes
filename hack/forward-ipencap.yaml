@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: forward-ipencap
+  namespace: kube-system
+  labels:
+    app: forward-ipencap
+spec:
+  selector:
+    matchLabels:
+      name: forward-ipencap
+  template:
+    metadata:
+      labels:
+        name: forward-ipencap
+    spec:
+      hostNetwork: true
+      initContainers:
+      - name: forward-ipencap
+        command:
+        - sh
+        - -c
+        - |
+          apk add iptables
+          iptables -C FORWARD -p ipencap -j ACCEPT || iptables -A FORWARD -p ipencap -j ACCEPT
+        image: alpine:3.11
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN"]
+      containers:
+      - name: sleep-forever
+        image: alpine:3.11
+        command: ["tail"]
+        args: ["-f", "/dev/null"]

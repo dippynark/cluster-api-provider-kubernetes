@@ -9,19 +9,40 @@ created and configured to serve as Nodes which form a cluster.
 
 ## Quickstart
 
-We will install the Cluster API controllers and configure an example cluster
-using the Kubernetes infrastructure provider.
+We will install the Cluster API controllers and configure an example cluster using the Kubernetes
+infrastructure provider. We will refer to the infrastructure cluster as the outer cluster and the
+example cluster as the inner cluster.
 
 ### Infrastructure
 
-Any recent Kubernetes cluster should be suitable (compatibility matrix to come).
-The following manifests assume we are using a cluster that supports
-[LoadBalancer Service] types, although they can be adapted for clusters that do
-not.
+Any recent Kubernetes cluster should be suitable for the outer cluster (compatibility matrix to
+come). The following manifests assume we are using an outer cluster that supports [LoadBalancer
+Service] types, although they can be adapted for clusters that do not.
+
+We are going to use [Calico] as an overlay implementation for the inner cluster with [IP-in-IP
+encapsulation] enabled so that our outer cluster does not need to know about the inner cluster's Pod
+IP range. To make this work we need to ensure that the `ipip` kernel module is loadable and that
+IPv4 encapsulated packets are forwarded by the kernel.
+
+On GKE this can be accomplished as follows:
+
+```sh
+# The GKE Ubuntu image includes the ipip kernel module
+# Calico handles loading the module if necessary
+# https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
+gcloud container clusters create management-cluster --image-type=UBUNTU
+
+# Allow IP-in-IP traffic between Nodes from Pods
+CLUSTER_CIDR=$(gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)")
+gcloud compute firewall-rules create allow-management-cluster-pods-ipip --source-ranges=$CLUSTER_CIDR --allow=ipip
+
+# Forward IPv4 encapsulated packets
+kubectl apply -f hack/forward-ipencap.yaml
+```
 
 ### Installation
 
-```bash
+```sh
 # Install cluster api
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.8/cluster-api-components.yaml
 
@@ -184,7 +205,7 @@ until kubectl get nodes &>/dev/null; do
   sleep 1
 done
 
-# Install a cni solution
+# Install Calico overlay
 # Note that this needs to align with the configured pod cidr
 # https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
 kubectl apply -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
@@ -196,9 +217,14 @@ kubectl get nodes
 unset KUBECONFIG
 rm example-kubeconfig
 kubectl delete cluster example
+# If using the GKE example above
+yes | gcloud compute firewall-rules delete allow-management-cluster-pods-ipip
+yes | gcloud container clusters delete management-cluster --async
 ```
 
 [Cluster API]: https://github.com/kubernetes-sigs/cluster-api
 [Cluster API Infrastructure Provider]: https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure
 [kind]: https://github.com/kubernetes-sigs/kind
 [LoadBalancer Service]: https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
+[Calico]: https://docs.projectcalico.org/v3.11/getting-started/kubernetes/
+[IP-in-IP encapsulation]: https://docs.projectcalico.org/v3.11/getting-started/kubernetes/installation/config-options#configuring-ip-in-ip
