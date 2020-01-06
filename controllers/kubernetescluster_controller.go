@@ -193,6 +193,15 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, err
 	}
 
+	// Check service type
+	// TODO: Check labels, ports and selector, update if necessary
+	// TODO: move this into validating webhook
+	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {
+		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service type has changed"))
+		return ctrl.Result{}, nil
+	}
+
 	// Retrieve service host
 	host := clusterService.Spec.ClusterIP
 	if clusterService.Spec.Type == corev1.ServiceTypeLoadBalancer {
@@ -232,13 +241,6 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
 		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service endpoint has changed"))
 		return ctrl.Result{}, nil
-	}
-
-	// Update load balancer type
-	// TODO: Check labels, ports and selector, update if necessary
-	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {
-		clusterService.Spec.Type = kubernetesCluster.Spec.ControlPlaneServiceType
-		return ctrl.Result{}, r.Update(context.TODO(), clusterService)
 	}
 
 	// Copy controlPlaneEndpoint to status so the Cluster API Cluster Controller can pull it
