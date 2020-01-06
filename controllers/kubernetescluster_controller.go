@@ -251,6 +251,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Mark the kubernetesCluster ready
+	// TODO: should this ever go back to no-ready if the Service is deleted for example?
 	kubernetesCluster.Status.Ready = true
 
 	return ctrl.Result{}, nil
