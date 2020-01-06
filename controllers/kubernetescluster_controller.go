@@ -230,10 +230,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Set controlPlaneEndpoint host and port
-	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host == "" && kubernetesCluster.Spec.ControlPlaneEndpoint.Port == 0 {
+	if kubernetesCluster.Spec.ControlPlaneEndpoint.IsZero() {
 		kubernetesCluster.Spec.ControlPlaneEndpoint.Host = host
 		kubernetesCluster.Spec.ControlPlaneEndpoint.Port = port
-		return ctrl.Result{}, nil
 	}
 
 	// Make sure endpoint has not changed

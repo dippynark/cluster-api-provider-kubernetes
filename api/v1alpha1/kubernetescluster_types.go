@@ -116,6 +116,11 @@ type APIEndpoint struct {
 	Port int32 `json:"port"`
 }
 
+// IsZero returns true if either the host or the port are zero values.
+func (v APIEndpoint) IsZero() bool {
+	return v.Host == "" || v.Port == 0
+}
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
