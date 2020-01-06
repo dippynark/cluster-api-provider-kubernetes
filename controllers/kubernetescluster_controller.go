@@ -45,7 +45,7 @@ const (
 	clusterControllerName           = "KubernetesCluster-controller"
 	apiServerPortName               = "kube-apiserver"
 	loadBalancerIngressRequeueAfter = time.Second * 1
-	clusterLoadBalancerPort         = 443
+	defaultClusterLoadBalancerPort  = 443
 )
 
 // KubernetesClusterReconciler reconciles a KubernetesCluster object
@@ -179,15 +179,6 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		// TODO: attempt to recreate and aquire same controlPlaneEndpoint host
-		if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != "" || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != 0 {
-			// Service was previously created so something has deleted it
-			// Since any existing machines depend on this endpoint being fixed we cannot recreate
-			// TODO: use hostname and dns or attempt to aquire same service ip
-			kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-			kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service %s cannot be found", clusterService.Name))
-			return ctrl.Result{}, nil
-		}
 		return r.createClusterService(cluster, kubernetesCluster)
 	}
 	if err != nil {
@@ -221,15 +212,23 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		host = loadBalancerHost
 	}
 
+	// Retrieve service port
+	var port int32
+	for _, servicePort := range clusterService.Spec.Ports {
+		if servicePort.TargetPort.String() == apiServerPortName {
+			port = servicePort.Port
+		}
+	}
+
 	// Set controlPlaneEndpoint host and port
 	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host == "" && kubernetesCluster.Spec.ControlPlaneEndpoint.Port == 0 {
 		kubernetesCluster.Spec.ControlPlaneEndpoint.Host = host
-		kubernetesCluster.Spec.ControlPlaneEndpoint.Port = clusterLoadBalancerPort
+		kubernetesCluster.Spec.ControlPlaneEndpoint.Port = port
 		return ctrl.Result{}, nil
 	}
 
 	// Make sure endpoint has not changed
-	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != host || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != clusterLoadBalancerPort {
+	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != host || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != port {
 		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
 		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service endpoint has changed"))
 		return ctrl.Result{}, nil
@@ -290,6 +289,22 @@ func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster
 
 func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 
+	// Attempt to acquire specified host
+	desiredClusterIP := ""
+	desiredLoadBalancerIP := ""
+	switch kubernetesCluster.Spec.ControlPlaneServiceType {
+	case corev1.ServiceTypeClusterIP:
+		desiredClusterIP = kubernetesCluster.Spec.ControlPlaneEndpoint.Host
+	case corev1.ServiceTypeLoadBalancer:
+		desiredLoadBalancerIP = kubernetesCluster.Spec.ControlPlaneEndpoint.Host
+	}
+
+	// Set specified port
+	desiredPort := int32(defaultClusterLoadBalancerPort)
+	if kubernetesCluster.Spec.ControlPlaneEndpoint.Port != 0 {
+		desiredPort = kubernetesCluster.Spec.ControlPlaneEndpoint.Port
+	}
+
 	clusterService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterServiceName(cluster),
@@ -307,11 +322,13 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 				{
 					Name:       "https",
 					Protocol:   "TCP",
-					Port:       clusterLoadBalancerPort,
+					Port:       desiredPort,
 					TargetPort: intstr.FromString(apiServerPortName),
 				},
 			},
-			Type: kubernetesCluster.Spec.ControlPlaneServiceType,
+			Type:           kubernetesCluster.Spec.ControlPlaneServiceType,
+			ClusterIP:      desiredClusterIP,
+			LoadBalancerIP: desiredLoadBalancerIP,
 		},
 	}
 	if err := controllerutil.SetControllerReference(kubernetesCluster, clusterService, r.Scheme); err != nil {
