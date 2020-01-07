@@ -208,7 +208,7 @@ done
 # Install Calico overlay
 # Note that this needs to align with the configured pod cidr
 # https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
-kubectl apply -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml
 
 # Interact with your new cluster!
 kubectl get nodes
