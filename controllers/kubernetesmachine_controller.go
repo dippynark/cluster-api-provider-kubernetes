@@ -645,7 +645,8 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	kindContainer := setKindContainerBase(machine, machinePod)
 
 	// Set readiness probe
-	// TODO: create proper https readiness check
+	// The health check for an apiserver is a TCP connection check on its listening port
+	// https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/#create-load-balancer-for-kube-apiserver
 	if kindContainer.ReadinessProbe == nil {
 		kindContainer.ReadinessProbe = &corev1.Probe{
 			PeriodSeconds: 3,
