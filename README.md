@@ -43,7 +43,7 @@ kubectl apply -f hack/forward-ipencap.yaml
 ### Installation
 
 ```sh
-# Install cluster api
+# Install cluster api manager
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.8/cluster-api-components.yaml
 
 # Install kubeadm bootstrap provider
