@@ -32,7 +32,7 @@ On GKE this can be accomplished as follows:
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
 gcloud container clusters create management-cluster --image-type=UBUNTU
 
-# Allow IP-in-IP traffic between Nodes from Pods
+# Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=$(gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)")
 gcloud compute firewall-rules create allow-management-cluster-pods-ipip --source-ranges=$CLUSTER_CIDR --allow=ipip
 
