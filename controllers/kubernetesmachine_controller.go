@@ -714,15 +714,6 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	// TODO: revist this for extra containers e.g. sidecars
 	machinePod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
-	// Set dns policy
-	if machinePod.Spec.DNSPolicy == "" && machinePod.Spec.DNSConfig == nil {
-		machinePod.Spec.DNSPolicy = corev1.DNSNone
-		// TODO: don't use Cloudflare's nameservers by default
-		machinePod.Spec.DNSConfig = &corev1.PodDNSConfig{
-			Nameservers: []string{"1.1.1.1", "1.0.0.1"},
-		}
-	}
-
 	// Set volumes
 	tmpVolumeMissing := true
 	runVolumeMissing := true
