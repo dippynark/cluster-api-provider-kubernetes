@@ -490,7 +490,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Check Machine Pod is ready before marking kubernetesMachine ready
-	// TODO: do we need this for worker Nodes?
 	if !utils.IsPodReady(machinePod) {
 		log.Info("Waiting for machine Pod to be ready")
 		return ctrl.Result{}, nil
