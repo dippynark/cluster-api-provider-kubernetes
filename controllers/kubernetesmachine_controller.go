@@ -861,7 +861,7 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 
 func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *corev1.Container {
 
-	// Find kind container
+	// Find or create kind container
 	var kindContainer *corev1.Container
 	index := -1
 	for index, container := range machinePod.Spec.Containers {
