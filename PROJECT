@@ -3,11 +3,11 @@ repo: github.com/dippynark/cluster-api-provider-kubernetes
 resources:
 - group: infrastructure
   kind: KubernetesCluster
-  version: v1alpha1
+  version: v1alpha2
 - group: infrastructure
   kind: KubernetesMachine
-  version: v1alpha1
+  version: v1alpha2
 - group: infrastructure
   kind: KubernetesMachineTemplate
-  version: v1alpha1
+  version: v1alpha2
 version: "2"

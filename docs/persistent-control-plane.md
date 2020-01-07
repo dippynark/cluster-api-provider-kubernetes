@@ -21,7 +21,7 @@ supports [dynamic volume provisioning].
 
 ```yaml
 kind: KubernetesMachine
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha1
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
 metadata:
   name: controller
 spec:

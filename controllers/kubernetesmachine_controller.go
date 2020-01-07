@@ -21,7 +21,7 @@ import (
 	"path"
 	"time"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"

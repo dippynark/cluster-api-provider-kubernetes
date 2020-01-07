@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
-	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	"github.com/pkg/errors"
@@ -76,7 +75,7 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 // updateStorage updates pod's Volumes to conform with the PersistentVolumeClaim
 // of kubernetesMachine's templates. If pod has conflicting local Volumes these
 // are replaced with Volumes that conform to the kubernetesMachine's templates.
-func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *infrav1.KubernetesMachine, machinePod *corev1.Pod) error {
+func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *corev1.Pod) error {
 	currentVolumes := machinePod.Spec.Volumes
 	claims, err := r.getPersistentVolumeClaims(kubernetesMachine)
 	if err != nil {
@@ -200,7 +199,7 @@ func machinePodImage(machine *clusterv1.Machine) string {
 	return fmt.Sprintf("%s:%s", defaultImageName, *machine.Spec.Version)
 }
 
-func machinePodName(kubernetsMachine *infrav1.KubernetesMachine) string {
+func machinePodName(kubernetsMachine *capkv1.KubernetesMachine) string {
 	return kubernetsMachine.Name
 }
 

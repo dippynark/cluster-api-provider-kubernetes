@@ -19,7 +19,7 @@ import (
 	"flag"
 	"os"
 
-	infrav1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	"github.com/dippynark/cluster-api-provider-kubernetes/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -40,7 +40,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
 
-	_ = infrav1.AddToScheme(scheme)
+	_ = capkv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

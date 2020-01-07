@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha1"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
