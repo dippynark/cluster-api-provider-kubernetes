@@ -715,6 +715,8 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	machinePod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Set volumes
+	// Inspired by kind's defaults
+	// https://github.com/kubernetes-sigs/kind/blob/c8a82d8570b989988626c3f722f3a10c675f01f7/pkg/cluster/internal/providers/docker/provision.go#L167-L176
 	tmpVolumeMissing := true
 	runVolumeMissing := true
 	libModulesVolumeMissing := true
