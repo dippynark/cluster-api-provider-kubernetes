@@ -196,11 +196,11 @@ done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
 
 # Switch to example cluster
+# If the cluster api endpoint is not reachable from your machine you can exec into the
+# controller Node (Pod) and run `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
 export KUBECONFIG=example-kubeconfig
 
 # Wait for the apiserver to come up
-# If the cluster api endpoint is not reachable from your machine consider
-# port-forwarding to the example-lb Service and connecting to localhost
 until kubectl get nodes &>/dev/null; do
   sleep 1
 done
