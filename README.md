@@ -63,16 +63,16 @@ kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/re
 ```sh
 # Apply cluster infrastructure
 kubectl apply -f <(cat <<EOF
-kind: KubernetesCluster
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+kind: KubernetesCluster
 metadata:
   name: example
 spec:
   # Change for clusters that do not support LoadBalancer Service types
   controlPlaneServiceType: LoadBalancer
 ---
-kind: Cluster
 apiVersion: cluster.x-k8s.io/v1alpha2
+kind: Cluster
 metadata:
   name: example
 spec:
@@ -83,16 +83,16 @@ spec:
       cidrBlocks: ["192.168.0.0/16"]
     serviceDomain: "cluster.local"
   infrastructureRef:
-    kind: KubernetesCluster
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+    kind: KubernetesCluster
     name: example
 EOF
 )
 
 # Deploy controller machine
 kubectl apply -f <(cat <<EOF
-kind: KubeadmConfig
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+kind: KubeadmConfig
 metadata:
   name: controller
 spec:
@@ -107,13 +107,13 @@ spec:
       extraArgs:
         enable-hostpath-provisioner: "true"
 ---
-kind: KubernetesMachine
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+kind: KubernetesMachine
 metadata:
   name: controller
 ---
-kind: Machine
 apiVersion: cluster.x-k8s.io/v1alpha2
+kind: Machine
 metadata:
   name: controller
   labels:
@@ -123,20 +123,20 @@ spec:
   version: "v1.17.0"
   bootstrap:
     configRef:
-      kind: KubeadmConfig
       apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+      kind: KubeadmConfig
       name: controller
   infrastructureRef:
-    kind: KubernetesMachine
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+    kind: KubernetesMachine
     name: controller
 EOF
 )
 
 # Deploy worker machine deployment
 kubectl apply -f <(cat <<EOF
-kind: KubernetesMachineTemplate
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+kind: KubernetesMachineTemplate
 metadata:
   name: worker
 spec:
@@ -157,8 +157,8 @@ spec:
             cgroups-per-qos: "false"
             enforce-node-allocatable: ""
 ---
-kind: MachineDeployment
 apiVersion: cluster.x-k8s.io/v1alpha2
+kind: MachineDeployment
 metadata:
   name: worker
   labels:
@@ -179,12 +179,12 @@ spec:
       version: "v1.17.0"
       bootstrap:
         configRef:
-          kind: KubeadmConfigTemplate
           apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+          kind: KubeadmConfigTemplate
           name: worker
       infrastructureRef:
-        kind: KubernetesMachineTemplate
         apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+        kind: KubernetesMachineTemplate
         name: worker
 EOF
 )
