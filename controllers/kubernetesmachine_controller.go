@@ -446,7 +446,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Create persistent volume claims
-	// TODO: clean up pvcs if they are removed from the list of templates
 	// TODO: set error phase/reason/message if irrecoverable error occurs
 	err = r.createPersistentVolumeClaims(kubernetesMachine)
 	if err != nil {
@@ -635,10 +634,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = "true"
 
 	// Set persistent volume claims
-	err = r.updateStorage(kubernetesMachine, machinePod)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	updateStorage(kubernetesMachine, machinePod)
 
 	// Set kind container
 	kindContainer := setKindContainerBase(machine, machinePod)
@@ -684,10 +680,7 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 	}
 
 	// Set persistent volume claims
-	err = r.updateStorage(kubernetesMachine, machinePod)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	updateStorage(kubernetesMachine, machinePod)
 
 	// Set kind container
 	setKindContainerBase(machine, machinePod)

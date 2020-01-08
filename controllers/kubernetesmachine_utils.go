@@ -22,26 +22,22 @@ const (
 	providerIDPrefix = "kubernetes://"
 )
 
-func (r *KubernetesMachineReconciler) getPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) (map[string]corev1.PersistentVolumeClaim, error) {
+func getPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) map[string]corev1.PersistentVolumeClaim {
 	templates := kubernetesMachine.Spec.VolumeClaimTemplates
 	claims := make(map[string]corev1.PersistentVolumeClaim, len(templates))
 	for i := range templates {
 		claim := templates[i]
 		claim.Name = getPersistentVolumeClaimName(kubernetesMachine, &claim)
 		claim.Namespace = kubernetesMachine.Namespace
-		// TODO: make pvs be owned by the cluster? or the kubeadmControlPlane?
-		if err := controllerutil.SetControllerReference(kubernetesMachine, &claim, r.Scheme); err != nil {
-			return claims, err
-		}
 		claims[templates[i].Name] = claim
 	}
-	return claims, nil
+	return claims
 }
 
 func getPersistentVolumeClaimName(kubernetesMachine *capkv1.KubernetesMachine, claim *corev1.PersistentVolumeClaim) string {
 	// TODO: should we conform to the stateful set heuristics?
 	// https://github.com/kubernetes/kubernetes/blob/2cb17cc67745aa39f700e1d0c3d22c70074bee46/pkg/volume/util.go#L301-L303
-	return fmt.Sprintf("%s-%s", kubernetesMachine.Name, claim.Name)
+	return fmt.Sprintf("%s-%s", claim.Name, kubernetesMachine.Name)
 }
 
 func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) error {
@@ -50,24 +46,18 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 	// this potentially triggers many nop loops - do something about this
 	// ReplicaSet controller seems to do this too so maybe this is okay
 	// https://github.com/kubernetes/kubernetes/blob/ff975e865df4ff941688c98a0bb02db7fae28dfe/pkg/controller/replicaset/replica_set.go#L741
-	claims, err := r.getPersistentVolumeClaims(kubernetesMachine)
-	if err != nil {
-		return err
-	}
-	for _, claim := range claims {
-		_, err = r.CoreV1Client.PersistentVolumeClaims(claim.Namespace).Get(claim.Name, metav1.GetOptions{})
+	for _, claim := range getPersistentVolumeClaims(kubernetesMachine) {
+		_, err := r.CoreV1Client.PersistentVolumeClaims(claim.Namespace).Get(claim.Name, metav1.GetOptions{})
 		switch {
 		case k8serrors.IsNotFound(err):
 			_, err := r.CoreV1Client.PersistentVolumeClaims(claim.Namespace).Create(&claim)
-			// IsAlreadyExists should never happen
-			if err != nil && !k8serrors.IsAlreadyExists(err) {
+			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to create PVC %s: %s", claim.Name, err))
 			}
 		case err != nil:
 			errs = append(errs, fmt.Errorf("failed to retrieve PVC %s: %s", claim.Name, err))
 		}
 		// TODO: Check resource requirements and accessmodes, update if necessary
-		// TODO: check pvc is owned by kubernetesMachine
 	}
 	return errorutils.NewAggregate(errs)
 }
@@ -75,12 +65,9 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 // updateStorage updates pod's Volumes to conform with the PersistentVolumeClaim
 // of kubernetesMachine's templates. If pod has conflicting local Volumes these
 // are replaced with Volumes that conform to the kubernetesMachine's templates.
-func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *corev1.Pod) error {
+func updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *corev1.Pod) {
 	currentVolumes := machinePod.Spec.Volumes
-	claims, err := r.getPersistentVolumeClaims(kubernetesMachine)
-	if err != nil {
-		return err
-	}
+	claims := getPersistentVolumeClaims(kubernetesMachine)
 	newVolumes := make([]corev1.Volume, 0, len(claims))
 	for name, claim := range claims {
 		newVolumes = append(newVolumes, corev1.Volume{
@@ -100,7 +87,6 @@ func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *capkv1.Ku
 		}
 	}
 	machinePod.Spec.Volumes = newVolumes
-	return nil
 }
 
 func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, data *string) (*corev1.Secret, error) {
