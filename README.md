@@ -11,9 +11,10 @@ The primary use cases for this project are testing and experimentation.
 
 ## Quickstart
 
-We will install the Cluster API controllers and configure an example cluster using the Kubernetes
+We will deploy a Kubernetes cluster to provide the infrastructure, install the Cluster API
+controllers and configure an example Kubernetes cluster using the Cluster API and the Kubernetes
 infrastructure provider. We will refer to the infrastructure cluster as the outer cluster and the
-example cluster as the inner cluster.
+Cluster API cluster as the inner cluster.
 
 ### Infrastructure
 
