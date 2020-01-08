@@ -7,6 +7,8 @@ This project is a [Cluster API Infrastructure Provider] implementation using
 Kubernetes itself as the infrastructure provider. Pods running [kind] are
 created and configured to serve as Nodes which form a cluster.
 
+The primary use cases for this project are testing and experimentation.
+
 ## Quickstart
 
 We will install the Cluster API controllers and configure an example cluster using the Kubernetes
