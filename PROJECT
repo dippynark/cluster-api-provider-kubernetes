@@ -10,4 +10,13 @@ resources:
 - group: infrastructure
   kind: KubernetesMachineTemplate
   version: v1alpha2
+- group: infrastructure
+  kind: KubernetesCluster
+  version: v1alpha3
+- group: infrastructure
+  kind: KubernetesMachine
+  version: v1alpha3
+- group: infrastructure
+  kind: KubernetesMachineTemplate
+  version: v1alpha3
 version: "2"
