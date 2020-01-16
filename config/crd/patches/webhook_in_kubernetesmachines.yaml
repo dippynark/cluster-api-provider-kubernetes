@@ -5,6 +5,7 @@ kind: CustomResourceDefinition
 metadata:
   name: kubernetesmachines.infrastructure.lukeaddison.co.uk
 spec:
+  preserveUnknownFields: False
   conversion:
     strategy: Webhook
     webhookClientConfig:

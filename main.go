@@ -98,6 +98,20 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "KubernetesMachine")
 		os.Exit(1)
 	}
+
+	// Setup webhooks
+	if err = (&infrastructurev1alpha3.KubernetesCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesCluster")
+		os.Exit(1)
+	}
+	if err = (&infrastructurev1alpha3.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
+		os.Exit(1)
+	}
+	if err = (&infrastructurev1alpha3.KubernetesMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachineTemplate")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

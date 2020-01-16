@@ -121,8 +121,8 @@ func (v APIEndpoint) IsZero() bool {
 // +kubebuilder:resource:categories=cluster-api
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesCluster status"
-// +kubebuilder:printcolumn:name="host",type="string",JSONPath=".status.apiEndpoints[0].host",description="Endpoint host for reaching the control plane"
-// +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".status.apiEndpoints[0].port",description="Endpoint port for reaching the control plane"
+// +kubebuilder:printcolumn:name="host",type="string",JSONPath=".spec.controlPlaneEndpoint.host",description="Endpoint host for reaching the control plane"
+// +kubebuilder:printcolumn:name="port",type="integer",JSONPath=".spec.controlPlaneEndpoint.port",description="Endpoint port for reaching the control plane"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // KubernetesCluster is the Schema for the kubernetesclusters API.
