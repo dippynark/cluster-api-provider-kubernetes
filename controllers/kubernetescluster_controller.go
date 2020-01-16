@@ -201,14 +201,7 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, err
 	}
 
-	// Check service type
-	// TODO: Check labels, ports and selector, update if necessary
-	// TODO: move this into validating webhook
-	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {
-		kubernetesCluster.Status.SetFailureReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetFailureMessage(errors.Errorf("Service type has changed"))
-		return ctrl.Result{}, nil
-	}
+	// TODO: use validating webhook to check service configuration is still valid
 
 	// Retrieve service host
 	host := clusterService.Spec.ClusterIP

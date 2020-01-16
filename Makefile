@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= dippynark/cluster-api-kubernetes-controller:latest
+IMG ?= dippynark/cluster-api-kubernetes-controller:dev
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd"
 
@@ -15,7 +15,11 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test ./pkg/... ./controllers/... -coverprofile cover.out
+
+.PHONY: e2e
+e2e: #docker-build
+	go test ./e2e/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
