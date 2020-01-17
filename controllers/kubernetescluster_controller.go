@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	capkv1alpha2 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -123,6 +124,13 @@ func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&source.Kind{Type: &clusterv1.Cluster{}},
 			&handler.EnqueueRequestsFromMapFunc{
 				ToRequests: util.ClusterToInfrastructureMapFunc(capkv1.GroupVersion.WithKind("KubernetesCluster")),
+			},
+		).
+		// TODO: fix ClusterToInfrastructureMapFunc to allow watches on multiple versions
+		Watches(
+			&source.Kind{Type: &clusterv1.Cluster{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: util.ClusterToInfrastructureMapFunc(capkv1alpha2.GroupVersion.WithKind("KubernetesCluster")),
 			},
 		).
 		Watches(

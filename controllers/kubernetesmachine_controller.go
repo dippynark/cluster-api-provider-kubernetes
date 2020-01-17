@@ -21,6 +21,7 @@ import (
 	"path"
 	"time"
 
+	capkv1alpha2 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
@@ -209,6 +210,13 @@ func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&source.Kind{Type: &clusterv1.Machine{}},
 			&handler.EnqueueRequestsFromMapFunc{
 				ToRequests: util.MachineToInfrastructureMapFunc(capkv1.GroupVersion.WithKind("KubernetesMachine")),
+			},
+		).
+		// TODO: fix MachineToInfrastructureMapFunc to allow watches on multiple versions
+		Watches(
+			&source.Kind{Type: &clusterv1.Machine{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: util.MachineToInfrastructureMapFunc(capkv1alpha2.GroupVersion.WithKind("KubernetesMachine")),
 			},
 		).
 		Watches(
