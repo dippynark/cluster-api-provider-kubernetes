@@ -44,6 +44,10 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
+const (
+	setupTimeoutSeconds = 10 * 60
+)
+
 var (
 	mgmt    *CAPKCluster
 	ctx     = context.Background()
@@ -129,7 +133,7 @@ var _ = BeforeSuite(func(done Done) {
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "cert-manager")
 
 	close(done)
-}, 300)
+}, setupTimeoutSeconds)
 
 var _ = AfterSuite(func() {
 	By("Tearing down test environment")

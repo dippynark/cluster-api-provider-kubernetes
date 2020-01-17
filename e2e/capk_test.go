@@ -45,7 +45,7 @@ var _ = Describe("Kubernetes", func() {
 					Cluster:       cluster,
 					InfraCluster:  infraCluster,
 					Nodes:         nodes,
-					CreateTimeout: 5 * time.Minute,
+					CreateTimeout: 10 * time.Minute,
 				}
 				input.ControlPlaneCluster()
 
@@ -56,7 +56,7 @@ var _ = Describe("Kubernetes", func() {
 		Context("Multi-node controlplane cluster", func() {
 			It("should create a multi-node controlplane cluster", func() {
 				cluster, infraCluster := clusterGen.GenerateCluster(namespace)
-				nodes := make([]framework.Node, 3)
+				nodes := make([]framework.Node, 2)
 				for i := range nodes {
 					nodes[i] = nodeGen.GenerateNode(cluster.Name)
 				}
@@ -66,7 +66,7 @@ var _ = Describe("Kubernetes", func() {
 					Cluster:       cluster,
 					InfraCluster:  infraCluster,
 					Nodes:         nodes,
-					CreateTimeout: 5 * time.Minute,
+					CreateTimeout: 20 * time.Minute,
 				}
 				input.ControlPlaneCluster()
 
