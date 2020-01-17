@@ -3,9 +3,10 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 
-	"github.com/dippynark/cluster-api-provider-kubernetes/e2e/framework/exec"
 	"github.com/pkg/errors"
+	"sigs.k8s.io/cluster-api/test/framework/exec"
 )
 
 type provider struct{}
@@ -33,18 +34,16 @@ func (g *provider) Manifests(ctx context.Context) ([]byte, error) {
 
 	manifests := stdout
 
-	cat := exec.NewCommand(
-		exec.WithCommand("cat"),
-		exec.WithArgs("../config/samples/capi-kubernetes-rbac.yaml"),
-	)
-	stdout, stderr, err = cat.Run(ctx)
+	// Since this is not a SIG-sponsored provider we need to give the Cluster API manager extra
+	// RBAC permissions for resources defined in this project
+	// https://cluster-api.sigs.k8s.io/providers/v1alpha1-to-v1alpha2.html#the-new-api-groups
+	rbacManifests, err := ioutil.ReadFile("../config/samples/capi-kubernetes-rbac.yaml")
 	if err != nil {
-		fmt.Println(string(stderr))
 		return nil, errors.WithStack(err)
 	}
 
 	manifests = append(manifests, []byte("\n---\n")...)
-	manifests = append(manifests, stdout...)
+	manifests = append(manifests, rbacManifests...)
 
 	return manifests, nil
 }

@@ -1,18 +1,21 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 
 	"github.com/pkg/errors"
 
-	"github.com/dippynark/cluster-api-provider-kubernetes/e2e/framework/management/kind"
 	yaml "gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/cluster-api/test/framework/exec"
+	"sigs.k8s.io/cluster-api/test/framework/management/kind"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	kindv1 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 )
@@ -52,12 +55,11 @@ func NewClusterForCAPK(ctx context.Context, name string, scheme *runtime.Scheme,
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	fmt.Print(f.Name())
-	//defer os.RemoveAll(f.Name())
+	defer os.RemoveAll(f.Name())
 	if _, err := f.Write(b); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	cluster, err := kind.NewClusterWithConfig(ctx, name, f.Name(), scheme, images...)
+	cluster, err := newClusterWithConfigCopy(ctx, name, f.Name(), scheme, images...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,4 +120,65 @@ func (c *CAPKCluster) GetWorkloadClient(ctx context.Context, namespace, name str
 		return nil, errors.WithStack(err)
 	}
 	return c.ClientFromRestConfig(restConfig)
+}
+
+// NewClusterWithConfig creates a kind cluster using a kind-config file.
+func newClusterWithConfigCopy(ctx context.Context, name, configFile string, scheme *runtime.Scheme, images ...string) (*kind.Cluster, error) {
+	cmd := exec.NewCommand(
+		exec.WithCommand("kind"),
+		exec.WithArgs("create", "cluster", "--name", name, "--config", configFile),
+	)
+	return create(ctx, cmd, name, scheme, images...)
+}
+
+func create(ctx context.Context, cmd *exec.Command, name string, scheme *runtime.Scheme, images ...string) (*kind.Cluster, error) {
+	stdout, stderr, err := cmd.Run(ctx)
+	if err != nil {
+		fmt.Println(string(stdout))
+		fmt.Println(string(stderr))
+		return nil, err
+	}
+	kubeconfig, err := getKubeconfig(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	f, err := ioutil.TempFile("", "management-kubeconfig")
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if _, err := f.Write(kubeconfig); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	c := &kind.Cluster{
+		Name:                       name,
+		KubeconfigPath:             f.Name(),
+		Scheme:                     scheme,
+		WorkloadClusterKubeconfigs: make(map[string]string),
+	}
+	for _, image := range images {
+		fmt.Printf("Looking for image %q locally to load to the management cluster\n", image)
+		if !c.ImageExists(ctx, image) {
+			fmt.Printf("Did not find image %q locally, not loading it to the management cluster\n", image)
+			continue
+		}
+		fmt.Printf("Loading image %q on to the management cluster\n", image)
+		if err := c.LoadImage(ctx, image); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+func getKubeconfig(ctx context.Context, name string) ([]byte, error) {
+	getPathCmd := exec.NewCommand(
+		exec.WithCommand("kind"),
+		exec.WithArgs("get", "kubeconfig", "--name", name),
+	)
+	stdout, stderr, err := getPathCmd.Run(ctx)
+	if err != nil {
+		fmt.Println(string(stderr))
+		return nil, err
+	}
+	return bytes.TrimSpace(stdout), nil
 }

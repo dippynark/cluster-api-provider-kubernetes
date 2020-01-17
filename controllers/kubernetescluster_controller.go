@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -114,7 +114,7 @@ func (r *KubernetesClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 	}
 
 	// Handle non-deleted clusters
-	return r.reconcileNormal(cluster, kubernetesCluster)
+	return r.reconcileNormal(ctx, cluster, kubernetesCluster)
 }
 
 func (r *KubernetesClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -167,7 +167,7 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 
 }
 
-func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+func (r *KubernetesClusterReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, kubernetesClusterLogName, kubernetesCluster.Name)
 
 	// If the kubernetes cluster does not have finalizer, add it.
@@ -182,12 +182,12 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Get or create load balancer service
 	clusterService := &corev1.Service{}
-	err := r.Get(context.TODO(), types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Namespace: kubernetesCluster.Namespace,
 		Name:      clusterServiceName(cluster),
 	}, clusterService)
 	if k8serrors.IsNotFound(err) {
-		return r.createClusterService(cluster, kubernetesCluster)
+		return r.createClusterService(ctx, cluster, kubernetesCluster)
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -282,7 +282,7 @@ func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster
 	}
 }
 
-func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
+func (r *KubernetesClusterReconciler) createClusterService(ctx context.Context, cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 
 	// Attempt to acquire specified host
 	desiredClusterIP := ""
@@ -305,13 +305,13 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 			Name:      clusterServiceName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: cluster.Name,
+				clusterv1.ClusterLabelName: cluster.Name,
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				clusterv1.MachineClusterLabelName:      cluster.Name,
-				clusterv1.MachineControlPlaneLabelName: "true",
+				clusterv1.ClusterLabelName:             cluster.Name,
+				clusterv1.MachineControlPlaneLabelName: "",
 			},
 			Ports: []corev1.ServicePort{
 				{
@@ -330,7 +330,7 @@ func (r *KubernetesClusterReconciler) createClusterService(cluster *clusterv1.Cl
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, r.Create(context.TODO(), clusterService)
+	return ctrl.Result{}, r.Create(ctx, clusterService)
 }
 
 func clusterServiceName(cluster *clusterv1.Cluster) string {

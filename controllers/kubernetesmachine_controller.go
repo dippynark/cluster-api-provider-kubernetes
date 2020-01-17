@@ -36,7 +36,7 @@ import (
 	coreV1Client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -115,11 +115,11 @@ type KubernetesMachineReconciler struct {
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=list;watch;create
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create
 
 func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
-	// TODO: what does ctx do
+	// TODO: what does ctx do?
 	ctx := context.Background()
 	log := log.Log.WithValues(namespaceLogName, req.Namespace, kubernetesMachineLogName, req.Name)
 
@@ -168,7 +168,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 		return ctrl.Result{}, err
 	}
 	if cluster == nil {
-		log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.MachineClusterLabelName))
+		log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterLabelName))
 		return ctrl.Result{}, nil
 	}
 
@@ -189,7 +189,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(machine, kubernetesMachine)
+		return r.reconcileDelete(ctx, machine, kubernetesMachine)
 	}
 
 	// Make sure infrastructure is ready
@@ -199,7 +199,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 	}
 
 	// Handle non-deleted machines
-	return r.reconcileNormal(cluster, machine, kubernetesMachine)
+	return r.reconcileNormal(ctx, cluster, machine, kubernetesMachine)
 }
 
 // SetupWithManager adds watches for this controller
@@ -266,7 +266,7 @@ func (r *KubernetesMachineReconciler) KubernetesClusterToKubernetesMachines(o ha
 		return result
 	}
 
-	labels := map[string]string{clusterv1.MachineClusterLabelName: cluster.Name}
+	labels := map[string]string{clusterv1.ClusterLabelName: cluster.Name}
 	machineList := &clusterv1.MachineList{}
 	if err := r.Client.List(context.TODO(), machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
 		log.Error(err, "failed to list KubernetesMachines")
@@ -355,7 +355,7 @@ func (r *KubernetesMachineReconciler) PersistentVolumeClaimToKubernetesMachine(o
 	return result
 }
 
-func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, machineLogName, machine.Name, kubernetesClusterLogName, kubernetesMachine.Name)
 
 	// If the kubernetesMachine is in an error state, return early
@@ -374,14 +374,14 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Make sure bootstrap data is available and populated.
-	if machine.Spec.Bootstrap.Data == nil {
+	if machine.Spec.Bootstrap.DataSecretName == nil {
 		log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
 		return ctrl.Result{}, nil
 	}
 
 	// Get or create machine pod
 	machinePod := &corev1.Pod{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{
+	err := r.Client.Get(ctx, types.NamespacedName{
 		Namespace: machine.Namespace,
 		Name:      machinePodName(kubernetesMachine),
 	}, machinePod)
@@ -394,7 +394,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
 			return ctrl.Result{}, nil
 		}
-		return r.createMachinePod(cluster, machine, kubernetesMachine)
+		return r.createMachinePod(ctx, cluster, machine, kubernetesMachine)
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -435,14 +435,19 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 
 	// Generate cloud-init bootstrap script secret
-	cloudInitScriptSecret, err := r.generatateCloudInitSecret(cluster, machine, kubernetesMachine, machine.Spec.Bootstrap.Data)
+	bootstrapData, err := r.getBootstrapData(ctx, machine)
+	if err != nil {
+		r.Log.Error(err, "failed to get bootstrap data")
+		return ctrl.Result{}, nil
+	}
+	cloudInitScriptSecret, err := r.generatateCloudInitSecret(cluster, machine, kubernetesMachine, bootstrapData)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Create secret
 	// TODO: check whether secret needs to be updated
-	err = r.Create(context.TODO(), cloudInitScriptSecret)
+	err = r.Create(ctx, cloudInitScriptSecret)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return ctrl.Result{}, err
 	}
@@ -492,7 +497,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// Set the provider ID on the Kubernetes node corresponding to the external machine
 	// NB. this step is necessary because there is not a cloud controller for kubernetes that executes this step
 	// TODO: if this has already been done, don't set it again?
-	if err := r.setNodeProviderID(cluster, machinePod); err != nil {
+	if err := r.setNodeProviderID(ctx, cluster, machinePod); err != nil {
 		return ctrl.Result{RequeueAfter: setNodeProviderIDRequeueAfter}, errors.Wrap(err, "failed to patch the Kubernetes node with the machine providerID")
 	}
 
@@ -509,13 +514,13 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) reconcileDelete(machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
 	if util.IsControlPlaneMachine(machine) && util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
 		// Check if machine pod exists
 		machinePod := &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{
+		err := r.Client.Get(ctx, types.NamespacedName{
 			Namespace: machine.Namespace,
 			Name:      machinePodName(kubernetesMachine),
 		}, machinePod)
@@ -583,17 +588,18 @@ func (r *KubernetesMachineReconciler) enableBoostrapProcess(machinePod *corev1.P
 	return r.kindContainerExec(machinePod, path.Join(cloudInitScriptsVolumeMountPath, cloudInitInstallScriptName))
 }
 
-func (r *KubernetesMachineReconciler) setNodeProviderID(cluster *clusterv1.Cluster, machinePod *corev1.Pod) error {
+func (r *KubernetesMachineReconciler) setNodeProviderID(ctx context.Context, cluster *clusterv1.Cluster, machinePod *corev1.Pod) error {
 	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, podLogName, machinePod.Name)
 
 	// Find controller pod
 	log.Info("Finding controller Pod")
 	labels := map[string]string{
-		clusterv1.MachineClusterLabelName:      cluster.Name,
-		clusterv1.MachineControlPlaneLabelName: "true",
+		clusterv1.ClusterLabelName: cluster.Name,
+		// TODO: add this to conversion logic (true -> "")
+		clusterv1.MachineControlPlaneLabelName: "",
 	}
 	podList := &corev1.PodList{}
-	if err := r.Client.List(context.TODO(), podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
+	if err := r.Client.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
 		return errors.Wrap(err, "failed to list controller Pods for Cluster")
 	}
 	if len(podList.Items) == 0 {
@@ -621,14 +627,14 @@ func (r *KubernetesMachineReconciler) kubeadmReset(machinePod *corev1.Pod) error
 	return r.kindContainerExec(machinePod, "kubeadm", "reset", "--force")
 }
 
-func (r *KubernetesMachineReconciler) createMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createMachinePod(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	if util.IsControlPlaneMachine(machine) {
-		return r.createControlPlaneMachinePod(cluster, machine, kubernetesMachine)
+		return r.createControlPlaneMachinePod(ctx, cluster, machine, kubernetesMachine)
 	}
-	return r.createWorkerMachinePod(cluster, machine, kubernetesMachine)
+	return r.createWorkerMachinePod(ctx, cluster, machine, kubernetesMachine)
 }
 
-func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
 	machinePod, err := r.getMachinePodBase(cluster, kubernetesMachine)
 	if err != nil {
@@ -639,7 +645,7 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 	if machinePod.Labels == nil {
 		machinePod.Labels = map[string]string{}
 	}
-	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = "true"
+	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = ""
 
 	// Set persistent volume claims
 	updateStorage(kubernetesMachine, machinePod)
@@ -677,10 +683,10 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(cluster *clus
 		kindContainer.Ports = append(kindContainer.Ports, apiServerContainerPort)
 	}
 
-	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
+	return ctrl.Result{}, r.Create(ctx, machinePod)
 }
 
-func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
+func (r *KubernetesMachineReconciler) createWorkerMachinePod(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 
 	machinePod, err := r.getMachinePodBase(cluster, kubernetesMachine)
 	if err != nil {
@@ -693,7 +699,7 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(cluster *clusterv1.
 	// Set kind container
 	setKindContainerBase(machine, machinePod)
 
-	return ctrl.Result{}, r.Create(context.TODO(), machinePod)
+	return ctrl.Result{}, r.Create(ctx, machinePod)
 }
 
 func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Cluster, kubernetesMachine *capkv1.KubernetesMachine) (*corev1.Pod, error) {
@@ -703,7 +709,7 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 			Name:      machinePodName(kubernetesMachine),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: cluster.Name,
+				clusterv1.ClusterLabelName: cluster.Name,
 			},
 		},
 		// TODO: work out why using `kubernetesMachine.Spec.PodSpec` causes

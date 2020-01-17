@@ -6,14 +6,14 @@ import (
 
 	. "github.com/onsi/ginkgo"
 
-	"github.com/dippynark/cluster-api-provider-kubernetes/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeadmv1beta1 "sigs.k8s.io/cluster-api-bootstrap-provider-kubeadm/kubeadm/v1beta1"
+	kubeadmv1beta1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
+	"sigs.k8s.io/cluster-api/test/framework"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
-	cabpkv1 "sigs.k8s.io/cluster-api-bootstrap-provider-kubeadm/api/v1alpha2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 )
 
 var _ = Describe("Kubernetes", func() {
@@ -53,7 +53,7 @@ var _ = Describe("Kubernetes", func() {
 			})
 		})
 
-		/*Context("Multi-node controlplane cluster", func() {
+		Context("Multi-node controlplane cluster", func() {
 			It("should create a multi-node controlplane cluster", func() {
 				cluster, infraCluster := clusterGen.GenerateCluster(namespace)
 				nodes := make([]framework.Node, 3)
@@ -72,7 +72,7 @@ var _ = Describe("Kubernetes", func() {
 
 				input.CleanUpCoreArtifacts()
 			})
-		})*/
+		})
 	})
 })
 
@@ -176,8 +176,8 @@ func (n *NodeGenerator) GenerateNode(clusterName string) framework.Node {
 			Namespace: namespace,
 			Name:      generatedName,
 			Labels: map[string]string{
-				capiv1.MachineControlPlaneLabelName: "true",
-				capiv1.MachineClusterLabelName:      clusterName,
+				capiv1.MachineControlPlaneLabelName: "",
+				capiv1.ClusterLabelName:             clusterName,
 			},
 		},
 		Spec: capiv1.MachineSpec{
@@ -195,7 +195,8 @@ func (n *NodeGenerator) GenerateNode(clusterName string) framework.Node {
 				Namespace:  kubernetesMachine.GetNamespace(),
 				Name:       kubernetesMachine.GetName(),
 			},
-			Version: &version,
+			Version:     &version,
+			ClusterName: clusterName,
 		},
 	}
 	return framework.Node{

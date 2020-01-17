@@ -25,14 +25,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
-	"github.com/dippynark/cluster-api-provider-kubernetes/e2e/framework"
-	"github.com/dippynark/cluster-api-provider-kubernetes/e2e/framework/generators"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	cabpkv1 "sigs.k8s.io/cluster-api-bootstrap-provider-kubeadm/api/v1alpha2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/test/framework"
+	"sigs.k8s.io/cluster-api/test/framework/generators"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -72,20 +73,28 @@ var _ = BeforeSuite(func(done Done) {
 	}
 	capiImage := os.Getenv("CAPI_IMAGE")
 	if capiImage == "" {
-		capiImage = "us.gcr.io/k8s-artifacts-prod/cluster-api/cluster-api-controller:v0.2.9"
+		capiImage = "gcr.io/k8s-staging-cluster-api/cluster-api-controller:master"
 	}
 	capiKubeadmBootstrapImage := os.Getenv("CAPI_KUBEADM_BOOTSTRAP_IMAGE")
 	if capiKubeadmBootstrapImage == "" {
-		capiKubeadmBootstrapImage = "us.gcr.io/k8s-artifacts-prod/capi-kubeadm/cluster-api-kubeadm-controller:v0.1.5"
+		capiKubeadmBootstrapImage = "gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:master"
+	}
+	capiKubeadmControlPlaneImage := os.Getenv("CAPI_KUBEADM_CONTROL_PLANE_IMAGE")
+	if capiKubeadmControlPlaneImage == "" {
+		capiKubeadmControlPlaneImage = "gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:master"
 	}
 	By("Setting up test environment")
 	var err error
 
 	// Set up the provider component generators
-	core := &generators.ClusterAPI{Version: "v0.2.9"}
-	bootstrap := &generators.KubeadmBootstrap{Version: "v0.1.5"}
+	core := &generators.ClusterAPI{KustomizePath: "../../../../sigs.k8s.io/cluster-api/config/default"}
+	bootstrap := &generators.KubeadmBootstrap{KustomizePath: "../../../../sigs.k8s.io/cluster-api/bootstrap/kubeadm/config/default"}
+	controlPlane := &generators.KubeadmControlPlane{KustomizePath: "../../../../sigs.k8s.io/cluster-api/controlplane/kubeadm/config/default"}
 	// Set up capk components based on current files
 	capk := &provider{}
+
+	// Set up cert manager
+	cm := &generators.CertManager{ReleaseVersion: "v0.11.1"}
 
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -93,21 +102,31 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(capiv1.AddToScheme(scheme)).To(Succeed())
 	Expect(cabpkv1.AddToScheme(scheme)).To(Succeed())
 	Expect(capkv1.AddToScheme(scheme)).To(Succeed())
+	Expect(controlplanev1.AddToScheme(scheme)).To(Succeed())
 
 	// Create the management cluster
 	kindClusterName := os.Getenv("CAPI_MGMT_CLUSTER_NAME")
 	if kindClusterName == "" {
 		kindClusterName = "capk-e2e-" + util.RandomString(6)
 	}
-	mgmt, err = NewClusterForCAPK(ctx, kindClusterName, scheme, managerImage, capiImage, capiKubeadmBootstrapImage)
+	mgmt, err = NewClusterForCAPK(ctx, kindClusterName, scheme, managerImage, capiImage, capiKubeadmBootstrapImage, capiKubeadmControlPlaneImage)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mgmt).NotTo(BeNil())
 
+	// Install the cert-manager components first as some CRDs there will be part of the other providers
+	framework.InstallComponents(ctx, mgmt, cm)
+
+	// Wait for cert manager service
+	// TODO: consider finding a way to make this service name dynamic.
+	framework.WaitForAPIServiceAvailable(ctx, mgmt, "v1beta1.webhook.cert-manager.io")
+
 	// Install all components
-	framework.InstallComponents(ctx, mgmt, core, bootstrap, capk)
+	framework.InstallComponents(ctx, mgmt, core, bootstrap, controlPlane, capk)
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capi-system")
-	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "cabpk-system")
+	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capi-kubeadm-bootstrap-system")
+	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capi-kubeadm-control-plane-system")
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capk-system")
+	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "cert-manager")
 
 	close(done)
 }, 300)

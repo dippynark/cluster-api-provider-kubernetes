@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -13,8 +14,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -89,9 +91,28 @@ func updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *core
 	machinePod.Spec.Volumes = newVolumes
 }
 
-func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, data *string) (*corev1.Secret, error) {
+func (r *KubernetesMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
+	if machine.Spec.Bootstrap.DataSecretName == nil {
+		return "", errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
 
-	cloudConfig, err := base64.StdEncoding.DecodeString(*data)
+	s := &corev1.Secret{}
+	key := types.NamespacedName{Namespace: machine.GetNamespace(), Name: *machine.Spec.Bootstrap.DataSecretName}
+	if err := r.Client.Get(ctx, key, s); err != nil {
+		return "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for KubernetesMachine %s/%s", machine.GetNamespace(), machine.GetName())
+	}
+
+	value, ok := s.Data["value"]
+	if !ok {
+		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return base64.StdEncoding.EncodeToString(value), nil
+}
+
+func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *clusterv1.Cluster, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, data string) (*corev1.Secret, error) {
+
+	cloudConfig, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode machine's bootstrap data")
 	}
@@ -106,7 +127,7 @@ func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *cluster
 			Name:      machinePodName(kubernetesMachine) + "-cloud-init",
 			Namespace: machine.Namespace,
 			Labels: map[string]string{
-				clusterv1.MachineClusterLabelName: cluster.Name,
+				clusterv1.ClusterLabelName: cluster.Name,
 			},
 		},
 		StringData: map[string]string{
