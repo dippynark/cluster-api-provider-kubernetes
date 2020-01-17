@@ -1,0 +1,44 @@
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha3-kubernetesmachine
+  failurePolicy: Fail
+  name: mkubernetesmachine.kb.io
+  rules:
+  - apiGroups:
+    - infrastructure.lukeaddison.co.uk
+    apiVersions:
+    - v1alpha3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - kubernetesmachines
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha2-kubernetesmachine
+  failurePolicy: Fail
+  name: mkubernetesmachine.kb.io
+  rules:
+  - apiGroups:
+    - infrastructure.lukeaddison.co.uk
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - kubernetesmachines

@@ -112,6 +112,10 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachineTemplate")
 		os.Exit(1)
 	}
+	if err = (&capkv1.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
