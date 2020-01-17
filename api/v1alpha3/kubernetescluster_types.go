@@ -66,13 +66,13 @@ type KubernetesClusterStatus struct {
 	Ready bool `json:"ready"`
 }
 
-// SetErrorReason sets the KubernetesCluster error reason.
-func (s *KubernetesClusterStatus) SetErrorReason(v capierrors.ClusterStatusError) {
+// SetFailureReason sets the KubernetesCluster error reason.
+func (s *KubernetesClusterStatus) SetFailureReason(v capierrors.ClusterStatusError) {
 	s.FailureReason = &v
 }
 
-// SetErrorMessage sets the KubernetesCluster error message.
-func (s *KubernetesClusterStatus) SetErrorMessage(v error) {
+// SetFailureMessage sets the KubernetesCluster error message.
+func (s *KubernetesClusterStatus) SetFailureMessage(v error) {
 	s.FailureMessage = pointer.StringPtr(v.Error())
 }
 

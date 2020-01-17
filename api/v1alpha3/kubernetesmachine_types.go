@@ -67,13 +67,13 @@ type KubernetesMachineStatus struct {
 	Ready bool `json:"ready"`
 }
 
-// SetErrorReason sets the KubernetesMachine error reason.
-func (s *KubernetesMachineStatus) SetErrorReason(v capierrors.MachineStatusError) {
+// SetFailureReason sets the KubernetesMachine error reason.
+func (s *KubernetesMachineStatus) SetFailureReason(v capierrors.MachineStatusError) {
 	s.FailureReason = &v
 }
 
-// SetErrorMessage sets the KubernetesMachine error message.
-func (s *KubernetesMachineStatus) SetErrorMessage(v error) {
+// SetFailureMessage sets the KubernetesMachine error message.
+func (s *KubernetesMachineStatus) SetFailureMessage(v error) {
 	s.FailureMessage = pointer.StringPtr(v.Error())
 }
 

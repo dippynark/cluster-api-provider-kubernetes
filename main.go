@@ -19,8 +19,8 @@ import (
 	"flag"
 	"os"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
-	infrastructurev1alpha3 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
+	capkv1alpha2 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	"github.com/dippynark/cluster-api-provider-kubernetes/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -42,7 +42,7 @@ func init() {
 	_ = clusterv1.AddToScheme(scheme)
 
 	_ = capkv1.AddToScheme(scheme)
-	_ = infrastructurev1alpha3.AddToScheme(scheme)
+	_ = capkv1alpha2.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -100,19 +100,19 @@ func main() {
 	}
 
 	// Setup webhooks
-	if err = (&infrastructurev1alpha3.KubernetesCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&capkv1.KubernetesCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesCluster")
 		os.Exit(1)
 	}
-	if err = (&infrastructurev1alpha3.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&capkv1.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
 		os.Exit(1)
 	}
-	if err = (&infrastructurev1alpha3.KubernetesMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&capkv1.KubernetesMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachineTemplate")
 		os.Exit(1)
 	}
-	if err = (&capkv1.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&capkv1alpha2.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
 		os.Exit(1)
 	}

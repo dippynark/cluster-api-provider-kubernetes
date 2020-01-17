@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/pod"
 	"github.com/pkg/errors"

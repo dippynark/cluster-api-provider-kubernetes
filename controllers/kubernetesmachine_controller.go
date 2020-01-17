@@ -21,7 +21,7 @@ import (
 	"path"
 	"time"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	utils "github.com/dippynark/cluster-api-provider-kubernetes/pkg/utils"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -351,7 +351,7 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, machineLogName, machine.Name, kubernetesClusterLogName, kubernetesMachine.Name)
 
 	// If the kubernetesMachine is in an error state, return early
-	if kubernetesMachine.Status.ErrorReason != nil || kubernetesMachine.Status.ErrorMessage != nil {
+	if kubernetesMachine.Status.FailureReason != nil || kubernetesMachine.Status.FailureMessage != nil {
 		return reconcile.Result{}, nil
 	}
 
@@ -382,8 +382,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 			// Machine pod was previous created so something has deleted it
 			// This could be due to the Node it was running on failing (for example)
 			// We rely on a higher level object for recreation
-			kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-			kubernetesMachine.Status.SetErrorMessage(errors.New("Machine Pod cannot be found"))
+			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
 			return ctrl.Result{}, nil
 		}
 		return r.createMachinePod(cluster, machine, kubernetesMachine)
@@ -396,8 +396,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Ensure machine pod is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(machinePod); ref == nil || ref.UID != kubernetesMachine.UID {
-		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod is not controlled by KubernetesMachine"))
+		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod is not controlled by KubernetesMachine"))
 		return ctrl.Result{}, nil
 	}
 
@@ -414,15 +414,15 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Make sure machine pod uid and providerID match
 	if getPodUIDFromProviderID(*kubernetesMachine.Spec.ProviderID) != string(machinePod.UID) {
-		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod UID has changed"))
+		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod UID has changed"))
 		return ctrl.Result{}, nil
 	}
 
 	// Handle deleting machine pod
 	if !machinePod.ObjectMeta.DeletionTimestamp.IsZero() {
-		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("Machine Pod has been deleted unexpectedly"))
+		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod has been deleted unexpectedly"))
 		return ctrl.Result{}, nil
 	}
 
@@ -440,8 +440,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	}
 	// Ensure secret is controlled by kubernetes machine
 	if ref := metav1.GetControllerOf(cloudInitScriptSecret); ref == nil || ref.UID != kubernetesMachine.UID {
-		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("bootstrap Secret is not controlled by KubernetesMachine"))
+		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("bootstrap Secret is not controlled by KubernetesMachine"))
 		return ctrl.Result{}, nil
 	}
 
@@ -459,8 +459,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(cluster *clusterv1.Cluster
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Terminated != nil {
-		kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetErrorMessage(errors.Errorf("kind container has terminated: %s", kindContainerStatus.State.Terminated.Reason))
+		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("kind container has terminated: %s", kindContainerStatus.State.Terminated.Reason))
 
 		return ctrl.Result{}, nil
 	}
@@ -527,8 +527,8 @@ func (r *KubernetesMachineReconciler) reconcileDelete(machine *clusterv1.Machine
 		} else {
 			// TODO: the pod is not found, do we want to hang here instead?
 			kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
-			kubernetesMachine.Status.SetErrorReason(capierrors.UnsupportedChangeMachineError)
-			kubernetesMachine.Status.SetErrorMessage(errors.New("Machine Pod cannot be found"))
+			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
 
 			return ctrl.Result{}, nil
 		}
@@ -557,9 +557,9 @@ func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine
 		k.Status.Phase = capkv1.KubernetesMachinePhaseRunning
 	}
 
-	// Set phase to "Failed" if any of Status.ErrorReason or Status.ErrorMessage
+	// Set phase to "Failed" if any of Status.FailureReason or Status.FailureMessage
 	// is not-nil
-	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
+	if k.Status.FailureReason != nil || k.Status.FailureMessage != nil {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseFailed
 	}
 

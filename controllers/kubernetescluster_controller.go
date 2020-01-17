@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha2"
+	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -187,9 +187,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Ensure load balancer is controlled by kubernetes cluster
 	if ref := metav1.GetControllerOf(clusterService); ref == nil || ref.UID != kubernetesCluster.UID {
-		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetFailureReason(capierrors.UnsupportedChangeClusterError)
 		err := errors.Errorf("expected Service %s to be controlled by KubernetesCluster", clusterService.Name)
-		kubernetesCluster.Status.SetErrorMessage(err)
+		kubernetesCluster.Status.SetFailureMessage(err)
 		return ctrl.Result{}, err
 	}
 
@@ -197,8 +197,8 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 	// TODO: Check labels, ports and selector, update if necessary
 	// TODO: move this into validating webhook
 	if clusterService.Spec.Type != kubernetesCluster.Spec.ControlPlaneServiceType {
-		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service type has changed"))
+		kubernetesCluster.Status.SetFailureReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetFailureMessage(errors.Errorf("Service type has changed"))
 		return ctrl.Result{}, nil
 	}
 
@@ -237,17 +237,9 @@ func (r *KubernetesClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster
 
 	// Make sure endpoint has not changed
 	if kubernetesCluster.Spec.ControlPlaneEndpoint.Host != host || kubernetesCluster.Spec.ControlPlaneEndpoint.Port != port {
-		kubernetesCluster.Status.SetErrorReason(capierrors.UnsupportedChangeClusterError)
-		kubernetesCluster.Status.SetErrorMessage(errors.Errorf("Service endpoint has changed"))
+		kubernetesCluster.Status.SetFailureReason(capierrors.UnsupportedChangeClusterError)
+		kubernetesCluster.Status.SetFailureMessage(errors.Errorf("Service endpoint has changed"))
 		return ctrl.Result{}, nil
-	}
-
-	// Copy controlPlaneEndpoint to status so the Cluster API Cluster Controller can pull it
-	kubernetesCluster.Status.APIEndpoints = []capkv1.APIEndpoint{
-		{
-			Host: kubernetesCluster.Spec.ControlPlaneEndpoint.Host,
-			Port: kubernetesCluster.Spec.ControlPlaneEndpoint.Port,
-		},
 	}
 
 	// Mark the kubernetesCluster ready
@@ -277,9 +269,9 @@ func (r *KubernetesClusterReconciler) reconcilePhase(k *capkv1.KubernetesCluster
 		k.Status.Phase = capkv1.KubernetesClusterPhaseProvisioned
 	}
 
-	// Set phase to "Failed" if any of Status.ErrorReason or Status.ErrorMessage
+	// Set phase to "Failed" if any of Status.FailureReason or Status.FailureMessage
 	// is not-nil
-	if k.Status.ErrorReason != nil || k.Status.ErrorMessage != nil {
+	if k.Status.FailureReason != nil || k.Status.FailureMessage != nil {
 		k.Status.Phase = capkv1.KubernetesClusterPhaseFailed
 	}
 
