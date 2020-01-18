@@ -13,14 +13,6 @@ endif
 
 all: manager
 
-# Run tests
-test: generate fmt vet manifests
-	go test ./pkg/... ./controllers/... -coverprofile cover.out
-
-.PHONY: e2e
-e2e: #docker-build
-	go test -v ./e2e/... -coverprofile cover.out
-
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
@@ -54,6 +46,13 @@ fmt:
 # Run go vet against code
 vet:
 	go vet ./...
+
+# Run tests
+test: generate fmt vet manifests
+	go test $(shell go list ./... | grep -v /e2e) -coverprofile cover.out
+
+e2e: docker-build
+	go test -v ./e2e/... -coverprofile cover.out
 
 # Generate code
 generate: controller-gen
