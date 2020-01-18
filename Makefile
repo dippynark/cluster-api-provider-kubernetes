@@ -19,7 +19,7 @@ test: generate fmt vet manifests
 
 .PHONY: e2e
 e2e: #docker-build
-	go test ./e2e/... -coverprofile cover.out
+	go test -v ./e2e/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
