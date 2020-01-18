@@ -56,7 +56,7 @@ var _ = Describe("Kubernetes", func() {
 		Context("Multi-node controlplane cluster", func() {
 			It("should create a multi-node controlplane cluster", func() {
 				cluster, infraCluster := clusterGen.GenerateCluster(namespace)
-				nodes := make([]framework.Node, 2)
+				nodes := make([]framework.Node, 3)
 				for i := range nodes {
 					nodes[i] = nodeGen.GenerateNode(cluster.Name)
 				}
