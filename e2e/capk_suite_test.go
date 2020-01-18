@@ -98,7 +98,7 @@ var _ = BeforeSuite(func(done Done) {
 	capk := &provider{}
 
 	// Set up cert manager
-	cm := &generators.CertManager{ReleaseVersion: "v0.11.1"}
+	cm := &generators.CertManager{ReleaseVersion: "v0.12.0"}
 
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -120,9 +120,8 @@ var _ = BeforeSuite(func(done Done) {
 	// Install the cert-manager components first as some CRDs there will be part of the other providers
 	framework.InstallComponents(ctx, mgmt, cm)
 
-	// Wait for cert manager service
-	// TODO: consider finding a way to make this service name dynamic.
-	framework.WaitForAPIServiceAvailable(ctx, mgmt, "v1beta1.webhook.cert-manager.io")
+	// Wait for cert manager
+	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "cert-manager")
 
 	// Install all components
 	framework.InstallComponents(ctx, mgmt, core, bootstrap, controlPlane, capk)
@@ -130,7 +129,6 @@ var _ = BeforeSuite(func(done Done) {
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capi-kubeadm-bootstrap-system")
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capi-kubeadm-control-plane-system")
 	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "capk-system")
-	framework.WaitForPodsReadyInNamespace(ctx, mgmt, "cert-manager")
 
 	close(done)
 }, setupTimeoutSeconds)
