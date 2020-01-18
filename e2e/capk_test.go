@@ -141,7 +141,7 @@ func (n *NodeGenerator) GenerateNode(clusterName string) framework.Node {
 		Spec: cabpkv1.KubeadmConfigSpec{
 			ClusterConfiguration: &kubeadmv1beta1.ClusterConfiguration{
 				APIServer: kubeadmv1beta1.APIServer{
-					// Darwin support
+					// For NodePort connections
 					CertSANs: []string{"127.0.0.1"},
 				},
 				ControllerManager: kubeadmv1beta1.ControlPlaneComponent{
