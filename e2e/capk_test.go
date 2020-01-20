@@ -52,27 +52,6 @@ var _ = Describe("Kubernetes", func() {
 				input.CleanUpCoreArtifacts()
 			})
 		})
-
-		Context("Multi-node controlplane cluster", func() {
-			It("should create a multi-node controlplane cluster", func() {
-				cluster, infraCluster := clusterGen.GenerateCluster(namespace)
-				nodes := make([]framework.Node, 3)
-				for i := range nodes {
-					nodes[i] = nodeGen.GenerateNode(cluster.Name)
-				}
-
-				input = &framework.ControlplaneClusterInput{
-					Management:    mgmt,
-					Cluster:       cluster,
-					InfraCluster:  infraCluster,
-					Nodes:         nodes,
-					CreateTimeout: 20 * time.Minute,
-				}
-				input.ControlPlaneCluster()
-
-				input.CleanUpCoreArtifacts()
-			})
-		})
 	})
 })
 
