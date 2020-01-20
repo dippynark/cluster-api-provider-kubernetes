@@ -1,7 +1,11 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= dippynark/cluster-api-kubernetes-controller:dev
-CRD_OPTIONS ?= "crd:crdVersions=v1"
+# We set maxDescLen=0 to drop descriptions for fields in CRD OpenAPI schema, otherwise annotations
+# become too large when applying the kubernetesmachine and kubernetesmachinetemplate CRDs
+# https://github.com/coreos/prometheus-operator/issues/535
+# https://github.com/kubernetes-sigs/controller-tools/blob/0dd9d80ad4b98900d6066141dd4233354b25e3f3/pkg/crd/gen.go#L56-L61
+CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
