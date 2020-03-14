@@ -2,6 +2,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: capi-kubernetes
+  labels:
+    cluster.x-k8s.io/aggregate-to-manager: "true"
 rules:
 - apiGroups:
   - infrastructure.lukeaddison.co.uk
@@ -21,12 +23,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: capi-kubernetes
-subjects:
-- kind: ServiceAccount
-  name: default
-  namespace: capi-system
+  name: capi-kubeadm-control-plane-kubernetes
 roleRef:
   kind: ClusterRole
   name: capi-kubernetes
   apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: capi-kubeadm-control-plane-system
