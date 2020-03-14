@@ -33,7 +33,7 @@ On GKE this can be accomplished as follows:
 # The GKE Ubuntu image includes the ipip kernel module
 # Calico handles loading the module if necessary
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
-gcloud container clusters create management-cluster --image-type=UBUNTU
+gcloud beta container clusters create management-cluster --image-type=UBUNTU --release-channel=rapid --enable-autorepair
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=$(gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)")
@@ -46,19 +46,18 @@ kubectl apply -f hack/forward-ipencap.yaml
 ### Installation
 
 ```sh
-# Install cluster api manager
-kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.8/cluster-api-components.yaml
+# Install cert-manager
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v0.13.1/cert-manager.yaml
 
-# Install kubeadm bootstrap provider
-kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.5/bootstrap-components.yaml
+# Install cluster api manager
+kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.0/cluster-api-components.yaml
 
 # Install kubernetes infrastructure provider
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.2.1/provider-components.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/infrastructure-components.yaml
 
 # Allow cluster api controller to interact with kubernetes infrastructure resources
 # If the kubernetes provider were SIG-sponsored this would not be necesarry ;)
-# https://cluster-api.sigs.k8s.io/providers/v1alpha1-to-v1alpha2.html#the-new-api-groups
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.2.1/capi-kubernetes-rbac.yaml
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/capi-kubernetes-rbac.yaml
 ```
 
 ### Configuration
@@ -66,7 +65,7 @@ kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/re
 ```sh
 # Apply cluster infrastructure
 kubectl apply -f <(cat <<EOF
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesCluster
 metadata:
   name: example
@@ -74,7 +73,7 @@ spec:
   # Change for clusters that do not support LoadBalancer Service types
   controlPlaneServiceType: LoadBalancer
 ---
-apiVersion: cluster.x-k8s.io/v1alpha2
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
   name: example
@@ -86,67 +85,64 @@ spec:
       cidrBlocks: ["192.168.0.0/16"]
     serviceDomain: "cluster.local"
   infrastructureRef:
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
     kind: KubernetesCluster
+    name: example
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: KubeadmControlPlane
     name: example
 EOF
 )
 
-# Deploy controller machine
+# Apply machine template
 kubectl apply -f <(cat <<EOF
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-kind: KubeadmConfig
-metadata:
-  name: controller
-spec:
-  initConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-        cgroups-per-qos: "false"
-        enforce-node-allocatable: ""
-  clusterConfiguration:
-    controllerManager:
-      extraArgs:
-        enable-hostpath-provisioner: "true"
----
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
-kind: KubernetesMachine
-metadata:
-  name: controller
----
-apiVersion: cluster.x-k8s.io/v1alpha2
-kind: Machine
-metadata:
-  name: controller
-  labels:
-    cluster.x-k8s.io/cluster-name: example
-    cluster.x-k8s.io/control-plane: "true"
-spec:
-  version: "v1.17.0"
-  bootstrap:
-    configRef:
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-      kind: KubeadmConfig
-      name: controller
-  infrastructureRef:
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
-    kind: KubernetesMachine
-    name: controller
-EOF
-)
-
-# Deploy worker machine deployment
-kubectl apply -f <(cat <<EOF
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
-  name: worker
+  name: example
 spec:
   template:
     spec: {}
----
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+EOF
+)
+
+# Apply control plane
+kubectl apply -f <(cat <<EOF
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: KubeadmControlPlane
+metadata:
+  name: example
+spec:
+  replicas: 1
+  version: v1.17.0
+  infrastructureTemplate:
+    kind: KubernetesMachineTemplate
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    name: example
+  kubeadmConfigSpec:
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+    clusterConfiguration:
+      controllerManager:
+        extraArgs:
+          enable-hostpath-provisioner: "true"
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+EOF
+)
+
+# Apply workers
+kubectl apply -f <(cat <<EOF
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfigTemplate
 metadata:
   name: worker
@@ -160,35 +156,35 @@ spec:
             cgroups-per-qos: "false"
             enforce-node-allocatable: ""
 ---
-apiVersion: cluster.x-k8s.io/v1alpha2
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
 metadata:
-  name: worker
+  name: workers
   labels:
     cluster.x-k8s.io/cluster-name: example
     nodepool: default
 spec:
+  clusterName: example
   replicas: 3
   selector:
     matchLabels:
-      cluster.x-k8s.io/cluster-name: example
       nodepool: default
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: example
         nodepool: default
     spec:
+      clusterName: example
       version: "v1.17.0"
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
           kind: KubeadmConfigTemplate
           name: worker
       infrastructureRef:
-        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
         kind: KubernetesMachineTemplate
-        name: worker
+        name: example
 EOF
 )
 
@@ -210,8 +206,8 @@ done
 
 # Install Calico overlay
 # Note that this needs to align with the configured pod cidr
-# https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
-kubectl apply -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml
+# https://docs.projectcalico.org/v3.12/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
+kubectl apply -f https://docs.projectcalico.org/v3.12/manifests/calico.yaml
 
 # Interact with your new cluster!
 kubectl get nodes
