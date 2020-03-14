@@ -161,7 +161,6 @@ kind: MachineDeployment
 metadata:
   name: workers
   labels:
-    cluster.x-k8s.io/cluster-name: example
     nodepool: default
 spec:
   clusterName: example
@@ -175,7 +174,7 @@ spec:
         nodepool: default
     spec:
       clusterName: example
-      version: "v1.17.0"
+      version: v1.17.0
       bootstrap:
         configRef:
           apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
