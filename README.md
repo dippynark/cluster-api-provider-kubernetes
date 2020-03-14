@@ -48,6 +48,7 @@ kubectl apply -f hack/forward-ipencap.yaml
 ```sh
 # Install cert-manager
 kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v0.13.1/cert-manager.yaml
+kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=600s
 
 # Install cluster api manager
 kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.0/cluster-api-components.yaml
