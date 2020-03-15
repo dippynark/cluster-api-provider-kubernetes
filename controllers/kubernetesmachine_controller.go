@@ -658,7 +658,8 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(ctx context.C
 	// https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/#create-load-balancer-for-kube-apiserver
 	if kindContainer.ReadinessProbe == nil {
 		kindContainer.ReadinessProbe = &corev1.Probe{
-			PeriodSeconds: 3,
+			PeriodSeconds:    2,
+			FailureThreshold: 2,
 			Handler: corev1.Handler{
 				TCPSocket: &corev1.TCPSocketAction{
 					Port: intstr.FromInt(int(apiServerPort(cluster))),

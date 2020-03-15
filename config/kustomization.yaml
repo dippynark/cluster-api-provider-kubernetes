@@ -1,0 +1,29 @@
+namePrefix: capk-
+
+commonLabels:
+  cluster.x-k8s.io/provider: infrastructure-kubernetes
+
+bases:
+- crd
+- webhook # Disable this if you're not using the webhook functionality.
+- default
+
+patchesJson6902:
+- target:
+    group: apiextensions.k8s.io
+    version: v1
+    kind: CustomResourceDefinition
+    name: kubernetesclusters.infrastructure.lukeaddison.co.uk
+  path: patch_crd_webhook_namespace.yaml
+- target:
+    group: apiextensions.k8s.io
+    version: v1
+    kind: CustomResourceDefinition
+    name: kubernetesmachines.infrastructure.lukeaddison.co.uk
+  path: patch_crd_webhook_namespace.yaml
+- target:
+    group: apiextensions.k8s.io
+    version: v1
+    kind: CustomResourceDefinition
+    name: kubernetesmachinetemplates.infrastructure.lukeaddison.co.uk
+  path: patch_crd_webhook_namespace.yaml

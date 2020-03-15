@@ -46,147 +46,27 @@ kubectl apply -f hack/forward-ipencap.yaml
 ### Installation
 
 ```sh
-# Install cert-manager
-kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v0.13.1/cert-manager.yaml
-kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=600s
+# Add the Kubernetes infrastructure provider
+mkdir -p $HOME/.cluster-api
+cat > $HOME/.cluster-api/clusterctl.yaml <<EOF
+providers:
+- name: kubernetes
+  url: https://github.com/dippynark/cluster-api-provider-kubernetes/releases/latest/infrastructure-components.yaml
+  type: InfrastructureProvider
+EOF
 
-# Install cluster api manager
-kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.0/cluster-api-components.yaml
-
-# Install kubernetes infrastructure provider
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/infrastructure-components.yaml
-
-# Allow cluster api controller to interact with kubernetes infrastructure resources
-# If the kubernetes provider were SIG-sponsored this would not be necesarry ;)
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/capi-kubernetes-rbac.yaml
+# Initialise
+clusterctl init --infrastructure kubernetes
+# TODO: use aggregation label when available
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/kubeadm-control-plane-rbac.yaml
 ```
 
 ### Configuration
 
 ```sh
-# Apply cluster infrastructure
-kubectl apply -f <(cat <<EOF
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-kind: KubernetesCluster
-metadata:
-  name: example
-spec:
-  # Change for clusters that do not support LoadBalancer Service types
-  controlPlaneServiceType: LoadBalancer
----
-apiVersion: cluster.x-k8s.io/v1alpha3
-kind: Cluster
-metadata:
-  name: example
-spec:
-  clusterNetwork:
-    services:
-      cidrBlocks: ["172.16.0.0/12"]
-    pods:
-      cidrBlocks: ["192.168.0.0/16"]
-    serviceDomain: "cluster.local"
-  infrastructureRef:
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-    kind: KubernetesCluster
-    name: example
-  controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
-    kind: KubeadmControlPlane
-    name: example
-EOF
-)
-
-# Apply machine template
-kubectl apply -f <(cat <<EOF
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-kind: KubernetesMachineTemplate
-metadata:
-  name: example
-spec:
-  template:
-    spec: {}
-EOF
-)
-
-# Apply control plane
-kubectl apply -f <(cat <<EOF
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
-kind: KubeadmControlPlane
-metadata:
-  name: example
-spec:
-  replicas: 1
-  version: v1.17.0
-  infrastructureTemplate:
-    kind: KubernetesMachineTemplate
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-    name: example
-  kubeadmConfigSpec:
-    initConfiguration:
-      nodeRegistration:
-        kubeletExtraArgs:
-          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-          cgroups-per-qos: "false"
-          enforce-node-allocatable: ""
-    clusterConfiguration:
-      controllerManager:
-        extraArgs:
-          enable-hostpath-provisioner: "true"
-    joinConfiguration:
-      nodeRegistration:
-        kubeletExtraArgs:
-          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-          cgroups-per-qos: "false"
-          enforce-node-allocatable: ""
-EOF
-)
-
-# Apply workers
-kubectl apply -f <(cat <<EOF
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-kind: KubeadmConfigTemplate
-metadata:
-  name: worker
-spec:
-  template:
-    spec:
-      joinConfiguration:
-        nodeRegistration:
-          kubeletExtraArgs:
-            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
-            cgroups-per-qos: "false"
-            enforce-node-allocatable: ""
----
-apiVersion: cluster.x-k8s.io/v1alpha3
-kind: MachineDeployment
-metadata:
-  name: workers
-  labels:
-    nodepool: default
-spec:
-  clusterName: example
-  replicas: 3
-  selector:
-    matchLabels:
-      nodepool: default
-  template:
-    metadata:
-      labels:
-        nodepool: default
-    spec:
-      clusterName: example
-      version: v1.17.0
-      bootstrap:
-        configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-          kind: KubeadmConfigTemplate
-          name: worker
-      infrastructureRef:
-        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-        kind: KubernetesMachineTemplate
-        name: example
-EOF
-)
+export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE=LoadBalancer
+clusterctl config cluster example --kubernetes-version=v1.17.0 --control-plane-machine-count=3 --worker-machine-count=3 \
+  | kubectl apply -f -
 
 # Retrieve kubeconfig
 until [ -n "`kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' 2>/dev/null`" ] ; do
@@ -195,7 +75,7 @@ done
 kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
 
 # Switch to example cluster
-# If the cluster api endpoint is not reachable from your machine you can exec into the
+# If the cluster api endpoint is not reachable from your machine you can exec into a
 # controller Node (Pod) and run `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
 export KUBECONFIG=example-kubeconfig
 

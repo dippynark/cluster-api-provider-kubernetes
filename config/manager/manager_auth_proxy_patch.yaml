@@ -7,6 +7,11 @@ metadata:
   namespace: system
 spec:
   template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/scheme: https
+        prometheus.io/port: '8443'
     spec:
       containers:
       - name: kube-rbac-proxy

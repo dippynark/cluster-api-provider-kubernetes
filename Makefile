@@ -35,7 +35,9 @@ uninstall: manifests
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl apply -f -
+	kustomize build config | kubectl apply -f -
+	# TODO: use aggregation label when available
+	kubectl apply -f release/kubeadm-control-plane-rbac.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
@@ -56,6 +58,10 @@ test: generate fmt vet manifests
 
 e2e: docker-build
 	go test -v ./e2e/... -coverprofile cover.out
+
+release_manifests:
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config > release/infrastructure-components.yaml
 
 # Generate code
 generate: controller-gen

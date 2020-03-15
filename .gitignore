@@ -22,3 +22,6 @@ bin
 *.swp
 *.swo
 *~
+
+# Release manifests
+/release/infrastructure-components.yaml

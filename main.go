@@ -48,13 +48,23 @@ func init() {
 
 func main() {
 	var metricsAddr string
+	var watchNamespace string
 	var enableLeaderElection bool
+	var enableWebhook bool
 	var debug bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&watchNamespace, "namespace", "",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
+	flag.BoolVar(&enableWebhook, "enable-webhook", false,
+		"Disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.")
 	flag.Parse()
+
+	if watchNamespace != "" {
+		setupLog.Info("Watching cluster-api objects only in namespace for reconciliation", "namespace", watchNamespace)
+	}
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = debug
@@ -65,56 +75,61 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,
+		Namespace:          watchNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.KubernetesClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controller").WithName("KubernetesCluster"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "KubernetesCluster")
-		os.Exit(1)
-	}
+	if !enableWebhook {
 
-	// Create a Kubernetes core/v1 client.
-	config := mgr.GetConfig()
-	coreV1Client, err := coreV1Client.NewForConfig(config)
-	if err != nil {
-		setupLog.Error(err, "unable to initialise core client")
-		os.Exit(1)
-	}
+		if err = (&controllers.KubernetesClusterReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controller").WithName("KubernetesCluster"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "KubernetesCluster")
+			os.Exit(1)
+		}
 
-	if err = (&controllers.KubernetesMachineReconciler{
-		Client:       mgr.GetClient(),
-		CoreV1Client: coreV1Client,
-		Config:       config,
-		Log:          ctrl.Log.WithName("controller").WithName("KubernetesMachine"),
-		Scheme:       mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "KubernetesMachine")
-		os.Exit(1)
-	}
+		// Create a Kubernetes core/v1 client.
+		config := mgr.GetConfig()
+		coreV1Client, err := coreV1Client.NewForConfig(config)
+		if err != nil {
+			setupLog.Error(err, "unable to initialise core client")
+			os.Exit(1)
+		}
 
-	// Setup webhooks
-	if err = (&capkv1.KubernetesCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesCluster")
-		os.Exit(1)
-	}
-	if err = (&capkv1.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
-		os.Exit(1)
-	}
-	if err = (&capkv1.KubernetesMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachineTemplate")
-		os.Exit(1)
-	}
-	if err = (&capkv1alpha2.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
-		os.Exit(1)
+		if err = (&controllers.KubernetesMachineReconciler{
+			Client:       mgr.GetClient(),
+			CoreV1Client: coreV1Client,
+			Config:       config,
+			Log:          ctrl.Log.WithName("controller").WithName("KubernetesMachine"),
+			Scheme:       mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "KubernetesMachine")
+			os.Exit(1)
+		}
+	} else {
+
+		// Setup webhooks
+		if err = (&capkv1.KubernetesCluster{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesCluster")
+			os.Exit(1)
+		}
+		if err = (&capkv1.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
+			os.Exit(1)
+		}
+		if err = (&capkv1.KubernetesMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachineTemplate")
+			os.Exit(1)
+		}
+		if err = (&capkv1alpha2.KubernetesMachine{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "KubernetesMachine")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
