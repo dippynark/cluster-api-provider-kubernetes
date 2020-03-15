@@ -9,7 +9,6 @@ rules:
 - apiGroups:
   - infrastructure.lukeaddison.co.uk
   resources:
-  - kubernetesclusters
   - kubernetesmachines
   - kubernetesmachinetemplates
   verbs:

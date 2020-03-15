@@ -47,6 +47,7 @@ kubectl apply -f hack/forward-ipencap.yaml
 
 ```sh
 # Install clusterctl
+# TODO: use proper release when available
 # https://github.com/kubernetes-sigs/cluster-api/pull/2684
 git clone --single-branch --branch add-gcp-auth-provider-support https://github.com/dippynark/cluster-api
 cd cluster-api
@@ -64,13 +65,16 @@ EOF
 
 # Initialise
 clusterctl init --infrastructure kubernetes
+# Apply kubadm control plane RBAC
 # TODO: use aggregation label when available
+# https://github.com/kubernetes-sigs/cluster-api/pull/2685
 kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/kubeadm-control-plane-rbac.yaml
 ```
 
 ### Configuration
 
 ```sh
+# Use ClusterIP on clusters that do not support Services of type LoadBalancer
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE=LoadBalancer
 clusterctl config cluster example --kubernetes-version=v1.17.0 --control-plane-machine-count=3 --worker-machine-count=3 \
   | kubectl apply -f -
