@@ -33,11 +33,17 @@ On GKE this can be accomplished as follows:
 # The GKE Ubuntu image includes the ipip kernel module
 # Calico handles loading the module if necessary
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
-gcloud beta container clusters create management-cluster --image-type=UBUNTU --release-channel=rapid --enable-autorepair
+gcloud beta container clusters create management-cluster \
+  --image-type=UBUNTU \
+  --release-channel=rapid \
+  --machine-type=n1-standard-4 \
+  --enable-autorepair
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=$(gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)")
-gcloud compute firewall-rules create allow-management-cluster-pods-ipip --source-ranges=$CLUSTER_CIDR --allow=ipip
+gcloud compute firewall-rules create allow-management-cluster-pods-ipip \
+  --source-ranges=$CLUSTER_CIDR \
+  --allow=ipip
 
 # Forward IPv4 encapsulated packets
 kubectl apply -f hack/forward-ipencap.yaml
@@ -74,9 +80,16 @@ kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/re
 ### Configuration
 
 ```sh
-# Use ClusterIP on clusters that do not support Services of type LoadBalancer
-export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE=LoadBalancer
-clusterctl config cluster example --kubernetes-version=v1.17.0 --control-plane-machine-count=3 --worker-machine-count=3 \
+# Use ClusterIP for clusters that do not support Services of type LoadBalancer
+export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
+export KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS="1"
+export KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS="1Gi"
+export KUBERNETES_NODE_MACHINE_CPU_REQUESTS="1"
+export KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS="1Gi"
+clusterctl config cluster example \
+  --kubernetes-version=v1.17.0 \
+  --control-plane-machine-count=1 \
+  --worker-machine-count=1 \
   | kubectl apply -f -
 
 # Retrieve kubeconfig
