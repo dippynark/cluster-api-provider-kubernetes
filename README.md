@@ -46,6 +46,13 @@ kubectl apply -f hack/forward-ipencap.yaml
 ### Installation
 
 ```sh
+# Install clusterctl
+# https://github.com/kubernetes-sigs/cluster-api/pull/2684
+git clone --single-branch --branch add-gcp-auth-provider-support https://github.com/dippynark/cluster-api
+cd cluster-api
+go build -ldflags "$(hack/version.sh)" -o bin/clusterctl ./cmd/clusterctl
+export PATH=$PWD/bin:$PATH
+
 # Add the Kubernetes infrastructure provider
 mkdir -p $HOME/.cluster-api
 cat > $HOME/.cluster-api/clusterctl.yaml <<EOF
