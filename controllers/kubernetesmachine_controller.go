@@ -363,15 +363,11 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		return reconcile.Result{}, nil
 	}
 
-	// If the KubernetesMachine doesn't have finalizer, add it.
-	if !util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
-		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
-	}
+	// If kubernetes machine does't have finalizer, add it.
+	controllerutil.AddFinalizer(kubernetesMachine, capkv1.KubernetesMachineFinalizer)
 
-	// If the KubernetesMachine doesn't have foregroundDeletion finalizer, add it.
-	if !util.Contains(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents) {
-		kubernetesMachine.Finalizers = append(kubernetesMachine.Finalizers, metav1.FinalizerDeleteDependents)
-	}
+	// If the kubernetes machine does't have the foregroundDeletion finalizer, add it
+	controllerutil.AddFinalizer(kubernetesMachine, metav1.FinalizerDeleteDependents)
 
 	// Make sure bootstrap data is available and populated.
 	if machine.Spec.Bootstrap.DataSecretName == nil {
@@ -517,7 +513,8 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
 	// If the deleted machine is a control-plane node, exec kubeadm reset so the
 	// etcd member hosted on the machine gets removed in a controlled way
-	if util.IsControlPlaneMachine(machine) && util.Contains(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer) {
+
+	if util.IsControlPlaneMachine(machine) {
 		// Check if machine pod exists
 		machinePod := &corev1.Pod{}
 		err := r.Client.Get(ctx, types.NamespacedName{
@@ -539,7 +536,7 @@ func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machi
 			}
 		} else {
 			// TODO: the pod is not found, do we want to hang here instead?
-			kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
+			controllerutil.RemoveFinalizer(kubernetesMachine, capkv1.KubernetesMachineFinalizer)
 			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
 			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
 
@@ -548,7 +545,7 @@ func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machi
 	}
 
 	// Machine is deleted so remove the finalizer.
-	kubernetesMachine.Finalizers = util.Filter(kubernetesMachine.Finalizers, capkv1.KubernetesMachineFinalizer)
+	controllerutil.RemoveFinalizer(kubernetesMachine, capkv1.KubernetesMachineFinalizer)
 
 	return ctrl.Result{}, nil
 }

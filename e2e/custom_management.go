@@ -3,10 +3,13 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -115,11 +118,26 @@ func (c *CAPKCluster) GetWorkloadClient(ctx context.Context, namespace, name str
 	}
 	master := masterURL.String()
 
-	restConfig, err := clientcmd.BuildConfigFromFlags(master, f.Name())
+	// Wait for connectivity
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	httpClient := &http.Client{Transport: transport}
+	for {
+		res, err := httpClient.Get("https://127.0.0.1:30000/healthz")
+		if err != nil || res.StatusCode != 200 {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	workloadRestConfig, err := clientcmd.BuildConfigFromFlags(master, f.Name())
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return c.ClientFromRestConfig(restConfig)
+
+	return c.ClientFromRestConfig(workloadRestConfig)
 }
 
 // NewClusterWithConfig creates a kind cluster using a kind-config file.

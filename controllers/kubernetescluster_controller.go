@@ -170,15 +170,11 @@ func (r *KubernetesClusterReconciler) ServiceToKubernetesCluster(o handler.MapOb
 func (r *KubernetesClusterReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, kubernetesCluster *capkv1.KubernetesCluster) (ctrl.Result, error) {
 	log := r.Log.WithValues(namespaceLogName, cluster.Namespace, clusterLogName, cluster.Name, kubernetesClusterLogName, kubernetesCluster.Name)
 
-	// If the kubernetes cluster does not have finalizer, add it.
-	if !util.Contains(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer) {
-		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer)
-	}
+	// If kubernetes cluster does't have finalizer, add it
+	controllerutil.AddFinalizer(kubernetesCluster, capkv1.KubernetesClusterFinalizer)
 
-	// If the kubernetes cluster does not have the foregroundDeletion finalizer, add it
-	if !util.Contains(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents) {
-		kubernetesCluster.Finalizers = append(kubernetesCluster.Finalizers, metav1.FinalizerDeleteDependents)
-	}
+	// If the kubernetes cluster does't have the foregroundDeletion finalizer, add it
+	controllerutil.AddFinalizer(kubernetesCluster, metav1.FinalizerDeleteDependents)
 
 	// Get or create load balancer service
 	clusterService := &corev1.Service{}
@@ -254,7 +250,7 @@ func (r *KubernetesClusterReconciler) reconcileDelete(kubernetesCluster *capkv1.
 
 	// KubernetesCluster is deleted so remove the finalizer
 	// Rely on garbage collection to delete load balancer service
-	kubernetesCluster.Finalizers = util.Filter(kubernetesCluster.Finalizers, capkv1.KubernetesClusterFinalizer)
+	controllerutil.RemoveFinalizer(kubernetesCluster, capkv1.KubernetesClusterFinalizer)
 
 	return ctrl.Result{}, nil
 }

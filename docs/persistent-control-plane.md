@@ -16,7 +16,7 @@ provisioning].
 
 ```yaml
 kind: KubernetesMachine
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 metadata:
   name: controller
 spec:

@@ -1,4 +1,3 @@
-
 # Image URL to use all building/pushing image targets
 IMG ?= dippynark/cluster-api-kubernetes-controller:dev
 # We set maxDescLen=0 to drop descriptions for fields in CRD OpenAPI schema, otherwise annotations
@@ -6,6 +5,10 @@ IMG ?= dippynark/cluster-api-kubernetes-controller:dev
 # https://github.com/coreos/prometheus-operator/issues/535
 # https://github.com/kubernetes-sigs/controller-tools/blob/0dd9d80ad4b98900d6066141dd4233354b25e3f3/pkg/crd/gen.go#L56-L61
 CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
+
+# Make sure to update e2e/e2e.conf if either of these variables are changed
+CAPI_VERSION = v0.3.2
+CERT_MANAGER_VERSION = v0.11.1
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -44,6 +47,9 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	hack/remove-containers-requirement.sh config/crd/bases
 
+modules:
+	go mod tidy
+
 # Run go fmt against code
 fmt:
 	go fmt ./...
@@ -56,11 +62,22 @@ vet:
 test: generate fmt vet manifests
 	go test $(shell go list ./... | grep -v /e2e) -coverprofile cover.out
 
+SKIP_RESOURCE_CLEANUP ?= false
 e2e: docker-build
-	go test -v ./e2e/... -coverprofile cover.out
+	cd config/manager && kustomize edit set image controller=${IMG}
+	go test ./e2e -v -ginkgo.v -ginkgo.trace -count=1 -timeout=20m -tags=e2e -skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP)
+
+e2e_pull:
+	docker pull gcr.io/k8s-staging-cluster-api/cluster-api-controller:$(CAPI_VERSION)
+	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:$(CAPI_VERSION)
+	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:$(CAPI_VERSION)
+	docker pull quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)
+	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
+	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
 
 release_manifests:
 	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/kubeadm-control-plane-rbac > release/kubeadm-control-plane-rbac.yaml
 	kustomize build config > release/infrastructure-components.yaml
 
 # Generate code
@@ -68,7 +85,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 # Build the docker image
-docker-build: test
+docker-build:
 	docker build . -t ${IMG}
 
 # Push the docker image

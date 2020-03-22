@@ -7,7 +7,7 @@ The `controlPlaneServiceType` field can be set to specify the type of the Servic
 ClusterIP and LoadBalancer are supported. ClusterIP is the default if the field is omitted:
 
 ```yaml
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesCluster
 metadata:
   name: example
