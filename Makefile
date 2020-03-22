@@ -75,7 +75,7 @@ e2e_pull:
 	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
 	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
 
-release_manifests:
+release: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/kubeadm-control-plane-rbac > release/kubeadm-control-plane-rbac.yaml
 	kustomize build config > release/infrastructure-components.yaml
