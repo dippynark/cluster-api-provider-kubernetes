@@ -122,7 +122,7 @@ func (c *CAPKCluster) GetWorkloadClient(ctx context.Context, namespace, name str
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: transport, Timeout: 3 * time.Second}
 	for {
 		res, err := httpClient.Get("https://127.0.0.1:30000/healthz")
 		if err != nil || res.StatusCode != 200 {
