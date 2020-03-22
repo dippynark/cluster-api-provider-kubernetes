@@ -23,9 +23,6 @@ bin
 *.swo
 *~
 
-# Release manifests
-/release/infrastructure-components.yaml
-
 # Temporary cluster-api clone for building clusterctl
 # TODO: remove this when the GCP auth provider is supported
 #https://github.com/kubernetes-sigs/cluster-api/pull/2684
