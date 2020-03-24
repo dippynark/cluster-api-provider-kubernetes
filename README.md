@@ -18,9 +18,7 @@ Cluster API cluster as the inner cluster.
 
 ### Infrastructure
 
-Any recent Kubernetes cluster should be suitable for the outer cluster (compatibility matrix to
-come). The following manifests assume we are using an outer cluster that supports [LoadBalancer
-Service] types, although they can be adapted for clusters that do not.
+Any recent Kubernetes cluster (1.16+) should be suitable for the outer cluster.
 
 We are going to use [Calico] as an overlay implementation for the inner cluster with [IP-in-IP
 encapsulation] enabled so that our outer cluster does not need to know about the inner cluster's Pod
