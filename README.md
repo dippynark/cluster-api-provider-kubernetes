@@ -71,7 +71,7 @@ clusterctl init --infrastructure kubernetes
 # Apply kubadm control plane RBAC
 # TODO: use aggregation label when available
 # https://github.com/kubernetes-sigs/cluster-api/pull/2685
-CLUSTER_API_KUBERNETES_PROVIDER_VERSION=v0.3.0
+CLUSTER_API_KUBERNETES_PROVIDER_VERSION=v0.3.1
 kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/$CLUSTER_API_KUBERNETES_PROVIDER_VERSION/kubeadm-control-plane-rbac.yaml
 ```
 
