@@ -38,7 +38,7 @@ gcloud beta container clusters create management-cluster \
   --enable-autorepair
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
-CLUSTER_CIDR=$(gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)")
+CLUSTER_CIDR=`gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)"`
 gcloud compute firewall-rules create allow-management-cluster-pods-ipip \
   --source-ranges=$CLUSTER_CIDR \
   --allow=ipip
@@ -51,12 +51,11 @@ kubectl apply -f hack/forward-ipencap.yaml
 
 ```sh
 # Install clusterctl
-# TODO: use proper release when available
-# https://github.com/kubernetes-sigs/cluster-api/pull/2684
-git clone --single-branch --branch add-gcp-auth-provider-support https://github.com/dippynark/cluster-api
-cd cluster-api
-go build -ldflags "$(hack/version.sh)" -o bin/clusterctl ./cmd/clusterctl
-export PATH=$PWD/bin:$PATH
+# https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+CLUSTER_API_VERSION=v0.3.3
+curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$CLUSTER_API_VERSION/clusterctl-`uname -s  | tr '[:upper:]' '[:lower:]'`-amd64 -o clusterctl
+chmod +x ./clusterctl
+sudo mv ./clusterctl /usr/local/bin/clusterctl
 
 # Add the Kubernetes infrastructure provider
 mkdir -p $HOME/.cluster-api
@@ -72,7 +71,8 @@ clusterctl init --infrastructure kubernetes
 # Apply kubadm control plane RBAC
 # TODO: use aggregation label when available
 # https://github.com/kubernetes-sigs/cluster-api/pull/2685
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/v0.3.0/kubeadm-control-plane-rbac.yaml
+CLUSTER_API_KUBERNETES_PROVIDER_VERSION=v0.3.0
+kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/$CLUSTER_API_KUBERNETES_PROVIDER_VERSION/kubeadm-control-plane-rbac.yaml
 ```
 
 ### Configuration
@@ -106,15 +106,16 @@ until kubectl get nodes &>/dev/null; do
   sleep 1
 done
 
-# Install Calico overlay
-# Note that this needs to align with the configured pod cidr
-# https://docs.projectcalico.org/v3.12/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less%23installing-with-the-kubernetes-api-datastore50-nodes-or-less
-kubectl apply -f https://docs.projectcalico.org/v3.12/manifests/calico.yaml
+# Install a networking solution
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 # Interact with your new cluster!
 kubectl get nodes
+```
 
-# Clean up
+### Clean up
+
+```sh
 unset KUBECONFIG
 rm example-kubeconfig
 kubectl delete cluster example
