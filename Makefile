@@ -7,7 +7,7 @@ IMG ?= dippynark/cluster-api-kubernetes-controller:dev
 CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
 
 # Make sure to update e2e/e2e.conf if either of these variables are changed
-CAPI_VERSION = v0.3.2
+CAPI_VERSION = v0.3.3
 CERT_MANAGER_VERSION = v0.11.1
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -74,6 +74,7 @@ e2e_pull:
 	docker pull quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)
 	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
 	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
+	docker pull kindest/node:v1.17.0
 
 release: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}

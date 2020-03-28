@@ -21,7 +21,10 @@ import (
 )
 
 const (
-	defaultVersion = "v1.17.0"
+	// Make sure to update e2e/e2e.conf if the default version changes
+	defaultVersion                   = "v1.17.0"
+	defaultEventuallyTimeout         = 5 * time.Minute
+	defaultEventuallyPollingInterval = 10 * time.Second
 )
 
 var _ = Describe("Kubernetes", func() {
@@ -32,8 +35,8 @@ var _ = Describe("Kubernetes", func() {
 			clusterGen = &ClusterGenerator{}
 			cluster    *capiv1.Cluster
 		)
-		SetDefaultEventuallyTimeout(5 * time.Minute)
-		SetDefaultEventuallyPollingInterval(10 * time.Second)
+		SetDefaultEventuallyTimeout(defaultEventuallyTimeout)
+		SetDefaultEventuallyPollingInterval(defaultEventuallyPollingInterval)
 
 		BeforeEach(func() {
 			namespace = "default"
@@ -112,7 +115,7 @@ var _ = Describe("Kubernetes", func() {
 					Cluster:      cluster,
 					ControlPlane: kubeadmControlPlane,
 				}
-				framework.WaitForKubeadmControlPlaneMachinesToExist(ctx, assertKubeadmControlPlaneNodesExistInput, "10m")
+				framework.WaitForKubeadmControlPlaneMachinesToExist(ctx, assertKubeadmControlPlaneNodesExistInput)
 
 				// Create the workload nodes
 				createMachineDeploymentinput := framework.CreateMachineDeploymentInput{

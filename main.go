@@ -49,17 +49,17 @@ func init() {
 func main() {
 	var metricsAddr string
 	var watchNamespace string
+	var webhookPort int
 	var enableLeaderElection bool
-	var enableWebhook bool
 	var debug bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&watchNamespace, "namespace", "",
 		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
+	flag.IntVar(&webhookPort, "webhook-port", 0,
+		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
-	flag.BoolVar(&enableWebhook, "enable-webhook", false,
-		"Disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.")
 	flag.Parse()
 
 	if watchNamespace != "" {
@@ -74,7 +74,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
-		Port:               9443,
+		Port:               webhookPort,
 		Namespace:          watchNamespace,
 	})
 	if err != nil {
@@ -82,7 +82,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !enableWebhook {
+	if webhookPort == 0 {
 
 		if err = (&controllers.KubernetesClusterReconciler{
 			Client: mgr.GetClient(),

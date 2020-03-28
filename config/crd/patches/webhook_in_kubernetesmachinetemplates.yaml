@@ -10,7 +10,7 @@ spec:
     webhook:
       # TODO: check this is correct
       # https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.4/pkg/webhook/conversion/conversion.go#L29
-      conversionReviewVersions: ["v1beta1"]
+      conversionReviewVersions: ["v1", "v1beta1"]
       clientConfig:
         # this is "\n" used as a placeholder, otherwise it will be rejected by the apiserver for being blank,
         # but we're going to set it later using the cert-manager (or potentially a patch if not using cert-manager)
