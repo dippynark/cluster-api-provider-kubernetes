@@ -117,7 +117,7 @@ kubectl get nodes
 
 ```sh
 unset KUBECONFIG
-rm example-kubeconfig
+rm -f example-kubeconfig
 kubectl delete cluster example
 # If using the GKE example above
 yes | gcloud compute firewall-rules delete allow-management-cluster-pods-ipip
