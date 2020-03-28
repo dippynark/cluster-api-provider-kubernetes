@@ -6,6 +6,8 @@ IMG ?= dippynark/cluster-api-kubernetes-controller:dev
 # https://github.com/kubernetes-sigs/controller-tools/blob/0dd9d80ad4b98900d6066141dd4233354b25e3f3/pkg/crd/gen.go#L56-L61
 CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
 
+CONTROLLER_TOOLS_VERSION = v0.2.8
+
 # Make sure to update e2e/e2e.conf if either of these variables are changed
 CAPI_VERSION = v0.3.3
 CERT_MANAGER_VERSION = v0.11.1
@@ -102,7 +104,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.4 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION) ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen

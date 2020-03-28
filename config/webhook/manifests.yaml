@@ -13,6 +13,7 @@ webhooks:
       namespace: system
       path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha3-kubernetesmachine
   failurePolicy: Fail
+  matchPolicy: Equivalent
   name: mkubernetesmachine.kb.io
   rules:
   - apiGroups:
@@ -31,6 +32,7 @@ webhooks:
       namespace: system
       path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha2-kubernetesmachine
   failurePolicy: Fail
+  matchPolicy: Equivalent
   name: mkubernetesmachine.kb.io
   rules:
   - apiGroups:

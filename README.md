@@ -106,7 +106,7 @@ until kubectl get nodes &>/dev/null; do
   sleep 1
 done
 
-# Install a networking solution
+# Install Calico
 kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 # Interact with your new cluster!
