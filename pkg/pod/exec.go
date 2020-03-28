@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"context"
 	"io"
 
 	"sigs.k8s.io/kind/pkg/exec"
@@ -43,6 +44,20 @@ func (c *containerCmder) Command(command string, args ...string) exec.Cmd {
 	}
 }
 
+func (c *containerCmder) CommandContext(ctx context.Context, command string, args ...string) exec.Cmd {
+	return &containerCmd{
+		coreV1Client:  c.coreV1Client,
+		config:        c.config,
+		podName:       c.podName,
+		namespace:     c.namespace,
+		containerName: c.containerName,
+		command:       append([]string{command}, args...),
+		// TODO: use ctx
+		// https://github.com/kubernetes-sigs/kind/commit/3851627c7a1d05a5da2ac78bd9fd8a7ffdfdb327
+		ctx: ctx,
+	}
+}
+
 // v implements exec.Cmd for kind pods
 type containerCmd struct {
 	coreV1Client  *coreV1Client.CoreV1Client
@@ -54,6 +69,7 @@ type containerCmd struct {
 	stdin         io.Reader
 	stdout        io.Writer
 	stderr        io.Writer
+	ctx           context.Context
 }
 
 func (c *containerCmd) Run() error {

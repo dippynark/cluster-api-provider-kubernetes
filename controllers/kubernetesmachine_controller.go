@@ -187,6 +187,12 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	log = log.WithValues(kubernetesClusterLogName, kubernetesCluster.Name)
 
+	// Return early if the object or Cluster is paused
+	if util.IsPaused(cluster, kubernetesMachine) {
+		log.Info("Reconciliation is paused for this object")
+		return ctrl.Result{}, nil
+	}
+
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, machine, kubernetesMachine)
@@ -204,7 +210,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 // SetupWithManager adds watches for this controller
 func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	controller, err := ctrl.NewControllerManagedBy(mgr).
 		For(&capkv1.KubernetesMachine{}).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
@@ -243,7 +249,22 @@ func (r *KubernetesMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				ToRequests: handler.ToRequestsFunc(r.PersistentVolumeClaimToKubernetesMachine),
 			},
 		).
-		Complete(r)
+		Build(r)
+	if err != nil {
+		return err
+	}
+
+	// Add a watch on clusterv1.Cluster objects for paused notifications
+	// https://cluster-api.sigs.k8s.io/developer/providers/v1alpha2-to-v1alpha3.html#support-the-clusterx-k8siopaused-annotation-and-clusterspecpaused-field
+	clusterToKubernetesMachines, err := util.ClusterToObjectsMapper(mgr.GetClient(), &capkv1.KubernetesMachineList{}, mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	if err := util.WatchOnClusterPaused(controller, clusterToKubernetesMachines); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // KubernetesClusterToKubernetesMachines is a handler.ToRequestsFunc to be used
