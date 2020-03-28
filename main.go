@@ -32,6 +32,10 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const (
+	leaderElectionID = "controller-leader-election-capk"
+)
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
@@ -74,6 +78,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   leaderElectionID,
 		Port:               webhookPort,
 		Namespace:          watchNamespace,
 	})
