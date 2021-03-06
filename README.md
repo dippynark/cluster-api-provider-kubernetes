@@ -31,10 +31,10 @@ On GKE this can be accomplished as follows:
 # The GKE Ubuntu image includes the ipip kernel module
 # Calico handles loading the module if necessary
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
-gcloud beta container clusters create management \
+gcloud container clusters create management \
   --image-type=UBUNTU \
   --machine-type=n1-standard-4 \
-  --cluster-version=1.16
+  --cluster-version=1.19
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=`gcloud container clusters describe management --format="value(clusterIpv4Cidr)"`
@@ -51,7 +51,7 @@ kubectl apply -f hack/forward-ipencap.yaml
 ```sh
 # Install clusterctl
 # https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
-CLUSTER_API_VERSION=v0.3.3
+CLUSTER_API_VERSION=v0.3.14
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$CLUSTER_API_VERSION/clusterctl-`uname -s  | tr '[:upper:]' '[:lower:]'`-amd64 -o clusterctl
 chmod +x ./clusterctl
 sudo mv ./clusterctl /usr/local/bin/clusterctl
@@ -67,11 +67,6 @@ EOF
 
 # Initialise
 clusterctl init --infrastructure kubernetes
-# Apply kubadm control plane RBAC
-# TODO: use aggregation label when available
-# https://github.com/kubernetes-sigs/cluster-api/pull/2685
-CLUSTER_API_KUBERNETES_PROVIDER_VERSION=v0.3.1
-kubectl apply -f https://github.com/dippynark/cluster-api-provider-kubernetes/releases/download/$CLUSTER_API_KUBERNETES_PROVIDER_VERSION/kubeadm-control-plane-rbac.yaml
 ```
 
 ### Configuration

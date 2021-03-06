@@ -31,7 +31,7 @@ func (r *KubernetesMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/mutate-infrastructure-lukeaddison-co-uk-v1alpha2-kubernetesmachine,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.lukeaddison.co.uk,resources=kubernetesmachines,verbs=create;update,versions=v1alpha2,name=mkubernetesmachine.kb.io
+// +kubebuilder:webhook:path=/mutate-infrastructure-lukeaddison-co-uk-v1alpha2-kubernetesmachine,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.lukeaddison.co.uk,resources=kubernetesmachines,verbs=create;update,versions=v1alpha2,name=mkubernetesmachine.kb.io,sideEffects=None,admissionReviewVersions=v1beta1
 
 var _ webhook.Defaulter = &KubernetesMachine{}
 
