@@ -31,13 +31,13 @@ On GKE this can be accomplished as follows:
 # The GKE Ubuntu image includes the ipip kernel module
 # Calico handles loading the module if necessary
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
-gcloud beta container clusters create management-cluster \
+gcloud beta container clusters create management \
   --image-type=UBUNTU \
   --machine-type=n1-standard-4 \
   --cluster-version=1.16
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
-CLUSTER_CIDR=`gcloud container clusters describe management-cluster --format="value(clusterIpv4Cidr)"`
+CLUSTER_CIDR=`gcloud container clusters describe management --format="value(clusterIpv4Cidr)"`
 gcloud compute firewall-rules create allow-management-cluster-pods-ipip \
   --source-ranges=$CLUSTER_CIDR \
   --allow=ipip
@@ -120,7 +120,7 @@ rm -f example-kubeconfig
 kubectl delete cluster example
 # If using the GKE example above
 yes | gcloud compute firewall-rules delete allow-management-cluster-pods-ipip
-yes | gcloud container clusters delete management-cluster --async
+yes | gcloud container clusters delete management --async
 ```
 
 [Cluster API]: https://github.com/kubernetes-sigs/cluster-api
