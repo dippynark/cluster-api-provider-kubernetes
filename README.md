@@ -33,8 +33,7 @@ On GKE this can be accomplished as follows:
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
 gcloud container clusters create management \
   --image-type=UBUNTU \
-  --machine-type=n1-standard-4 \
-  --cluster-version=1.19
+  --machine-type=n1-standard-4
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=`gcloud container clusters describe management --format="value(clusterIpv4Cidr)"`
