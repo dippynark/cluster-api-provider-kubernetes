@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework"
 
 	// TODO: use upstream implementation -- see ./boostrap package README.md for details
@@ -88,10 +87,10 @@ var _ = BeforeSuite(func() {
 	By("Initializing a runtime.Scheme with all the GVK relevant for this test")
 	scheme := initScheme()
 
-	e2e.Byf("Loading the e2e test configuration from %q", configPath)
+	Byf("Loading the e2e test configuration from %q", configPath)
 	e2eConfig = loadE2EConfig(configPath)
 
-	e2e.Byf("Creating a clusterctl local repository into %q", artifactFolder)
+	Byf("Creating a clusterctl local repository into %q", artifactFolder)
 	clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
 
 	By("Setting up the bootstrap cluster")
@@ -120,13 +119,13 @@ func createClusterctlLocalRepository(config *clusterctl.E2EConfig, repositoryFol
 		RepositoryFolder: repositoryFolder,
 	}
 
-	// TODO: deploy Calico CNI
-	// Ensuring a CNI file is defined in the config and register a FileTransformation to inject the referenced file in place of the CNI_RESOURCES envSubst variable.
-	// Expect(config.Variables).To(HaveKey(e2e.CNIPath), "Missing %s variable in the config", e2e.CNIPath)
-	// cniPath := config.GetVariable(e2e.CNIPath)
-	// Expect(cniPath).To(BeAnExistingFile(), "The %s variable should resolve to an existing file", e2e.CNIPath)
+	// Ensuring a CNI file is defined in the config and register a FileTransformation to inject the
+	// referenced file in place of the CNI_RESOURCES envSubst variable.
+	Expect(config.Variables).To(HaveKey(CNIPath), "Missing %s variable in the config", CNIPath)
+	cniPath := config.GetVariable(CNIPath)
+	Expect(cniPath).To(BeAnExistingFile(), "The %s variable should resolve to an existing file", CNIPath)
 
-	// createRepositoryInput.RegisterClusterResourceSetConfigMapTransformation(cniPath, e2e.CNIResources)
+	createRepositoryInput.RegisterClusterResourceSetConfigMapTransformation(cniPath, CNIResources)
 
 	clusterctlConfig := clusterctl.CreateRepository(context.TODO(), createRepositoryInput)
 	Expect(clusterctlConfig).To(BeAnExistingFile(), "The clusterctl config file does not exists in the local repository %s", repositoryFolder)

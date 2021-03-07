@@ -59,12 +59,10 @@ providers:
   type: InfrastructureProvider
   versions:
   - name: v0.3.0
-    value: "../config"
+    value: "../../config"
   files:
-  - sourcePath: "../release/metadata.yaml"
-    targetName: "metadata.yaml"
-  - sourcePath: "../release/cluster-template.yaml"
-    targetName: "cluster-template.yaml"
+  - sourcePath: "../data/infrastructure-kubernetes/cluster-template.yaml"
+  - sourcePath: "../../release/metadata.yaml"
 
 variables:
   KUBERNETES_VERSION: "v1.17.0"
@@ -73,6 +71,8 @@ variables:
   KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS: "0"
   KUBERNETES_NODE_MACHINE_CPU_REQUESTS: "0"
   KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS: "0"
+  CNI: "./data/cni/calico/calico.yaml"
+  EXP_CLUSTER_RESOURCE_SET: "true"
 
 intervals:
   default/wait-controllers: ["3m", "10s"]

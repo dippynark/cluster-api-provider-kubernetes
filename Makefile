@@ -105,7 +105,7 @@ $(GINKGO):
 	go build -tags=tools -o $(GINKGO) github.com/onsi/ginkgo/ginkgo
 
 ARTIFACTS ?= $(CURDIR)/artifacts
-E2E_CONF_FILE  ?= $(CURDIR)/e2e/e2e.conf
+E2E_CONF_FILE  ?= $(CURDIR)/e2e/config/capk.yaml
 SKIP_RESOURCE_CLEANUP ?= false
 USE_EXISTING_CLUSTER ?= false
 .PHONY: e2e
@@ -136,3 +136,13 @@ e2e_pull:
 	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
 	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
 	docker pull kindest/node:$(KUBERNETES_VERSION)
+
+DATA_DIR = e2e/data
+e2e_data:
+	# Download Calico for CNI implementation
+	curl https://docs.projectcalico.org/manifests/calico.yaml -o $(DATA_DIR)/cni/calico/calico.yaml
+	# Label Cluster to match ClusterResourceSet
+	cat release/cluster-template.yaml \
+		| sed "s/^metadata:.*/metadata:\n  labels:\n    cni: \"\$${CLUSTER_NAME}-crs-0\"/" \
+		> $(DATA_DIR)/infrastructure-kubernetes/cluster-template/cluster-template.yaml
+	kustomize build $(DATA_DIR)/infrastructure-kubernetes/cluster-template > $(DATA_DIR)/infrastructure-kubernetes/cluster-template.yaml
