@@ -161,6 +161,8 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	log = log.WithValues(machineLogName, machine.Name)
 
+	r.reconcileVersion(kubernetesMachine, machine)
+
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
@@ -597,6 +599,12 @@ func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine
 	// Set phase to "Deleting" if the deletion timestamp is set
 	if !k.DeletionTimestamp.IsZero() {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseDeleting
+	}
+}
+
+func (r *KubernetesMachineReconciler) reconcileVersion(k *capkv1.KubernetesMachine, m *clusterv1.Machine) {
+	if m.Spec.Version != nil {
+		k.Status.Version = m.Spec.Version
 	}
 }
 

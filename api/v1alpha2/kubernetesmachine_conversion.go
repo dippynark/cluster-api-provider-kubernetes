@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
-// ConvertTo converts this CronJob to the Hub version (capkv1alpha3).
+// ConvertTo converts this KubernetesMachine to the Hub version (capkv1alpha3).
 func (src *KubernetesMachine) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*capkv1alpha3.KubernetesMachine)
 
@@ -30,6 +30,7 @@ func (src *KubernetesMachine) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.PodSpec = src.Spec.PodSpec
 	dst.Spec.VolumeClaimTemplates = src.Spec.VolumeClaimTemplates
 
+	dst.Status.Version = src.Status.Version
 	dst.Status.FailureReason = src.Status.ErrorReason
 	dst.Status.FailureMessage = src.Status.ErrorMessage
 	dst.Status.Phase = capkv1alpha3.KubernetesMachinePhase(src.Status.Phase)
@@ -48,6 +49,7 @@ func (dst *KubernetesMachine) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.Spec.PodSpec = src.Spec.PodSpec
 	dst.Spec.VolumeClaimTemplates = src.Spec.VolumeClaimTemplates
 
+	dst.Status.Version = src.Status.Version
 	dst.Status.ErrorReason = src.Status.FailureReason
 	dst.Status.ErrorMessage = src.Status.FailureMessage
 	dst.Status.Phase = KubernetesMachinePhase(src.Status.Phase)

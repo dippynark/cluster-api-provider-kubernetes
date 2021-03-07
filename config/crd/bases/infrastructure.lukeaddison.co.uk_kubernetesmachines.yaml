@@ -21,11 +21,15 @@ spec:
   - additionalPrinterColumns:
     - description: Provider ID
       jsonPath: .spec.providerID
-      name: provider-id
+      name: providerid
       type: string
     - description: KubernetesMachine status
       jsonPath: .status.phase
       name: phase
+      type: string
+    - description: Kubernetes version associated with this KubernetesMachine
+      jsonPath: .status.version
+      name: version
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: age
@@ -2849,6 +2853,8 @@ spec:
                 type: string
               ready:
                 type: boolean
+              version:
+                type: string
             type: object
         type: object
     served: true
@@ -2858,11 +2864,15 @@ spec:
   - additionalPrinterColumns:
     - description: Provider ID
       jsonPath: .spec.providerID
-      name: provider-id
+      name: providerid
       type: string
     - description: KubernetesMachine status
       jsonPath: .status.phase
       name: phase
+      type: string
+    - description: Kubernetes version associated with this KubernetesMachine
+      jsonPath: .status.version
+      name: version
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: age
@@ -5686,6 +5696,8 @@ spec:
                 type: string
               ready:
                 type: boolean
+              version:
+                type: string
             type: object
         type: object
     served: true

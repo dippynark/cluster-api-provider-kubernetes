@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
-// ConvertTo converts this CronJob to the Hub version (capkv1alpha3).
+// ConvertTo converts this KubernetesCluster to the Hub version (capkv1alpha3).
 func (src *KubernetesCluster) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*capkv1alpha3.KubernetesCluster)
 

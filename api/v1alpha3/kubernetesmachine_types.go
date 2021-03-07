@@ -46,13 +46,20 @@ type KubernetesMachineSpec struct {
 
 // KubernetesMachineStatus defines the observed state of KubernetesMachine.
 type KubernetesMachineStatus struct {
-	// ErrorReason will be set in the event that there is a terminal problem
+	// Version specifies the current version of Kubernetes running
+	// on the corresponding Node. This is meant to be a means of bubbling
+	// up status from the Node to the KubernetesMachine.
+	// It is entirely optional, but useful for end-user UX if it’s present.
+	// +optional
+	Version *string `json:"version,omitempty"`
+
+	// FailureReason will be set in the event that there is a terminal problem
 	// reconciling the KubernetesMachine and will contain a succinct value
 	// suitable for machine interpretation.
 	// +optional
 	FailureReason *capierrors.MachineStatusError `json:"errorReason,omitempty"`
 
-	// ErrorMessage will be set in the event that there is a terminal problem
+	// FailureMessage will be set in the event that there is a terminal problem
 	// reconciling the KubernetesMachine and will contain a more verbose string
 	// suitable for logging and human consumption.
 	// +optional
@@ -111,8 +118,9 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
 // +kubebuilder:storageversion
-// +kubebuilder:printcolumn:name="provider-id",type="string",JSONPath=".spec.providerID",description="Provider ID"
+// +kubebuilder:printcolumn:name="providerid",type="string",JSONPath=".spec.providerID",description="Provider ID"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase",description="KubernetesMachine status"
+// +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Kubernetes version associated with this KubernetesMachine"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // KubernetesMachine is the Schema for the kubernetesmachines API.
