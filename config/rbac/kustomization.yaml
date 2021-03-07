@@ -10,3 +10,4 @@ resources:
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
 - capi_role.yaml
+- capi_kubeadm_control_plane_role.yaml

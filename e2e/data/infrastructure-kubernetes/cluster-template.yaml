@@ -1,0 +1,165 @@
+apiVersion: v1
+data: ${CNI_RESOURCES}
+kind: ConfigMap
+metadata:
+  name: cni-${CLUSTER_NAME}-crs-0
+---
+apiVersion: addons.cluster.x-k8s.io/v1alpha3
+kind: ClusterResourceSet
+metadata:
+  name: ${CLUSTER_NAME}-crs-0
+spec:
+  clusterSelector:
+    matchLabels:
+      cni: ${CLUSTER_NAME}-crs-0
+  resources:
+  - kind: ConfigMap
+    name: cni-${CLUSTER_NAME}-crs-0
+  strategy: ApplyOnce
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: KubeadmConfigTemplate
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cgroups-per-qos: "false"
+            enforce-node-allocatable: ""
+            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: Cluster
+metadata:
+  labels:
+    cni: ${CLUSTER_NAME}-crs-0
+  name: ${CLUSTER_NAME}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 192.168.0.0/16
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: KubeadmControlPlane
+    name: ${CLUSTER_NAME}
+  infrastructureRef:
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    kind: KubernetesCluster
+    name: ${CLUSTER_NAME}
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  clusterName: ${CLUSTER_NAME}
+  replicas: ${WORKER_MACHINE_COUNT}
+  selector:
+    matchLabels: null
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}
+      clusterName: ${CLUSTER_NAME}
+      infrastructureRef:
+        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+        kind: KubernetesMachineTemplate
+        name: ${CLUSTER_NAME}-worker
+      version: ${KUBERNETES_VERSION}
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineHealthCheck
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  clusterName: ${CLUSTER_NAME}
+  nodeStartupTimeout: 10m
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+  unhealthyConditions:
+  - status: Unknown
+    timeout: 1m
+    type: Ready
+  - status: "False"
+    timeout: 1m
+    type: Ready
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: KubeadmControlPlane
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  infrastructureTemplate:
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    kind: KubernetesMachineTemplate
+    name: ${CLUSTER_NAME}-control-plane
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      controllerManager:
+        extraArgs:
+          enable-hostpath-provisioner: "true"
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: ${KUBERNETES_VERSION}
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesCluster
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: ${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS}
+            memory: ${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS}
+      dnsConfig:
+        nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: ${KUBERNETES_NODE_MACHINE_CPU_REQUESTS}
+            memory: ${KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS}
+      dnsConfig:
+        nameservers:
+        - 8.8.8.8
+        - 8.8.4.4

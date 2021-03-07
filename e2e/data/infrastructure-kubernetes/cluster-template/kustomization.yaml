@@ -1,0 +1,39 @@
+resources:
+- cluster-template.yaml
+- crs.yaml
+
+patchesStrategicMerge:
+# Label Cluster to match ClusterResourceSet
+- |-
+  apiVersion: cluster.x-k8s.io/v1alpha3
+  kind: Cluster
+  metadata:
+    name: ${CLUSTER_NAME}
+    labels:
+      cni: ${CLUSTER_NAME}-crs-0
+# Using outer kind's kube-dns server yields containerd pull errors
+# TODO: work out why this fails when below nameservers are not specified
+- |-
+  apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+  kind: KubernetesMachineTemplate
+  metadata:
+    name: ${CLUSTER_NAME}-control-plane
+  spec:
+    template:
+      spec:
+        dnsConfig:
+          nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+- |-
+  apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+  kind: KubernetesMachineTemplate
+  metadata:
+    name: ${CLUSTER_NAME}-worker
+  spec:
+    template:
+      spec:
+        dnsConfig:
+          nameservers:
+          - 8.8.8.8
+          - 8.8.4.4

@@ -1,0 +1,20 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: capi-kubeadm-control-plane
+  labels:
+    kubeadm.controlplane.cluster.x-k8s.io/aggregate-to-manager: "true"
+rules:
+- apiGroups:
+  - infrastructure.lukeaddison.co.uk
+  resources:
+  - kubernetesmachines
+  - kubernetesmachinetemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

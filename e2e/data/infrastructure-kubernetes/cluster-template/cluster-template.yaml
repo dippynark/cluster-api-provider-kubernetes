@@ -1,0 +1,136 @@
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  controlPlaneServiceType: "${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}"
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: Cluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["192.168.0.0/16"]
+  infrastructureRef:
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    kind: KubernetesCluster
+    name: "${CLUSTER_NAME}"
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: KubeadmControlPlane
+    name: "${CLUSTER_NAME}"
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: "${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS}"
+            memory: "${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS}"
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: KubeadmControlPlane
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: "${KUBERNETES_VERSION}"
+  infrastructureTemplate:
+    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    kind: KubernetesMachineTemplate
+    name: "${CLUSTER_NAME}-control-plane"
+  kubeadmConfigSpec:
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+    clusterConfiguration:
+      controllerManager:
+        extraArgs:
+          enable-hostpath-provisioner: "true"
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          cgroups-per-qos: "false"
+          enforce-node-allocatable: ""
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: KubeadmConfigTemplate
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+            cgroups-per-qos: "false"
+            enforce-node-allocatable: ""
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-worker"
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: "${KUBERNETES_NODE_MACHINE_CPU_REQUESTS}"
+            memory: "${KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS}"
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineDeployment
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  replicas: ${WORKER_MACHINE_COUNT}
+  selector:
+    matchLabels:
+  template:
+    spec:
+      clusterName: "${CLUSTER_NAME}"
+      version: "${KUBERNETES_VERSION}"
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          name: "${CLUSTER_NAME}"
+          kind: KubeadmConfigTemplate
+      infrastructureRef:
+        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+        name: "${CLUSTER_NAME}-worker"
+        kind: KubernetesMachineTemplate
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineHealthCheck
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
+  unhealthyConditions:
+  - type: Ready
+    status: Unknown
+    timeout: 1m
+  - type: Ready
+    status: "False"
+    timeout: 1m
+  nodeStartupTimeout: 10m

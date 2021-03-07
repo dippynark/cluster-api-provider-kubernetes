@@ -1,16 +1,16 @@
 # Image URL to use all building/pushing image targets
-IMG ?= dippynark/cluster-api-kubernetes-controller:dev
+IMG ?= docker.io/dippynark/cluster-api-kubernetes-controller:dev
 # We set maxDescLen=0 to drop descriptions for fields in CRD OpenAPI schema, otherwise annotations
 # become too large when applying the kubernetesmachine and kubernetesmachinetemplate CRDs
 # https://github.com/coreos/prometheus-operator/issues/535
 # https://github.com/kubernetes-sigs/controller-tools/blob/0dd9d80ad4b98900d6066141dd4233354b25e3f3/pkg/crd/gen.go#L56-L61
 CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
 
-CONTROLLER_TOOLS_VERSION = v0.2.8
+CONTROLLER_TOOLS_VERSION = v0.5.0
 
-# Make sure to update e2e/e2e.conf if either of these variables are changed
-CAPI_VERSION = v0.3.3
-CERT_MANAGER_VERSION = v0.11.1
+CAPI_VERSION = v0.3.14
+CERT_MANAGER_VERSION = v0.16.1
+KUBERNETES_VERSION = v1.17.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -64,23 +64,8 @@ vet:
 test: generate fmt vet manifests
 	go test $(shell go list ./... | grep -v /e2e) -coverprofile cover.out
 
-SKIP_RESOURCE_CLEANUP ?= false
-e2e: docker-build
-	cd config/manager && kustomize edit set image controller=${IMG}
-	go test ./e2e -v -ginkgo.v -ginkgo.trace -count=1 -timeout=20m -tags=e2e -skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP)
-
-e2e_pull:
-	docker pull gcr.io/k8s-staging-cluster-api/cluster-api-controller:$(CAPI_VERSION)
-	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:$(CAPI_VERSION)
-	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:$(CAPI_VERSION)
-	docker pull quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)
-	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
-	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
-	docker pull kindest/node:v1.17.0
-
 release: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/kubeadm-control-plane-rbac > release/kubeadm-control-plane-rbac.yaml
 	kustomize build config > release/infrastructure-components.yaml
 
 # Generate code
@@ -111,3 +96,51 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+# e2e testing
+
+BIN_DIR := bin
+GINKGO := $(BIN_DIR)/ginkgo
+$(GINKGO):
+	go build -tags=tools -o $(GINKGO) github.com/onsi/ginkgo/ginkgo
+
+ARTIFACTS ?= $(CURDIR)/artifacts
+E2E_CONF_FILE  ?= $(CURDIR)/e2e/config/capk.yaml
+SKIP_RESOURCE_CLEANUP ?= false
+USE_EXISTING_CLUSTER ?= false
+.PHONY: e2e
+e2e: $(GINKGO) docker-build e2e_template
+	cd config/manager && kustomize edit set image controller=${IMG}
+	$(GINKGO) -v -trace -tags=e2e ./e2e -- \
+		-e2e.artifacts-folder="$(ARTIFACTS)" \
+		-e2e.config="$(E2E_CONF_FILE)" \
+		-e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) \
+		-e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)
+
+e2e_template:
+	sed -i 's#$(shell echo $(IMG) | awk -F : '{print $$1}'):.*#$(IMG)#' $(E2E_CONF_FILE)
+	sed -i 's#KUBERNETES_VERSION: .*#KUBERNETES_VERSION: "$(KUBERNETES_VERSION)"#' $(E2E_CONF_FILE)
+	sed -i 's#gcr.io/k8s-staging-cluster-api/cluster-api-controller:.*#gcr.io/k8s-staging-cluster-api/cluster-api-controller:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controlle:.*#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controlle:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:.*#gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#quay.io/jetstack/cert-manager-webhook:.*#quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#quay.io/jetstack/cert-manager-controller:.*#quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#quay.io/jetstack/cert-manager-cainjector:.*#quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#kindest/node:.*#kindest/node:$(KUBERNETES_VERSION)#' $(E2E_CONF_FILE)
+
+e2e_pull:
+	docker pull gcr.io/k8s-staging-cluster-api/cluster-api-controller:$(CAPI_VERSION)
+	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:$(CAPI_VERSION)
+	docker pull gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:$(CAPI_VERSION)
+	docker pull quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)
+	docker pull quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)
+	docker pull quay.io/jetstack/cert-manager-cainjector:$(CERT_MANAGER_VERSION)
+	docker pull kindest/node:$(KUBERNETES_VERSION)
+
+DATA_DIR = e2e/data
+e2e_data:
+	# Download Calico for CNI implementation
+	curl https://docs.projectcalico.org/manifests/calico.yaml -o $(DATA_DIR)/cni/calico/calico.yaml
+	# Copy release template
+	cp release/cluster-template.yaml $(DATA_DIR)/infrastructure-kubernetes/cluster-template/cluster-template.yaml
+	kustomize build $(DATA_DIR)/infrastructure-kubernetes/cluster-template > $(DATA_DIR)/infrastructure-kubernetes/cluster-template.yaml
