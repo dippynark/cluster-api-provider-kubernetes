@@ -1,4 +1,11 @@
 ---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  controlPlaneServiceType: "${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}"
+---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
@@ -15,13 +22,6 @@ spec:
     apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
     kind: KubeadmControlPlane
     name: "${CLUSTER_NAME}"
----
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-kind: KubernetesCluster
-metadata:
-  name: "${CLUSTER_NAME}"
-spec:
-  controlPlaneServiceType: "${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}"
 ---
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate

@@ -20,8 +20,6 @@ spec:
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfigTemplate
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
 spec:
   template:
@@ -56,8 +54,6 @@ spec:
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
@@ -81,8 +77,6 @@ spec:
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineHealthCheck
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
@@ -101,8 +95,6 @@ spec:
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
 spec:
   infrastructureTemplate:
@@ -132,8 +124,6 @@ spec:
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesCluster
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
 spec:
   controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}
@@ -141,8 +131,6 @@ spec:
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}-control-plane
 spec:
   template:
@@ -153,12 +141,14 @@ spec:
           requests:
             cpu: ${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS}
             memory: ${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS}
+      dnsConfig:
+        nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
 ---
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
-  labels:
-    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}-worker
 spec:
   template:
@@ -169,3 +159,7 @@ spec:
           requests:
             cpu: ${KUBERNETES_NODE_MACHINE_CPU_REQUESTS}
             memory: ${KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS}
+      dnsConfig:
+        nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
