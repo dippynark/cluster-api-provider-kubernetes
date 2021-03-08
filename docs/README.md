@@ -1,7 +1,7 @@
 # Documentation
 
-- [Kubernetes Clusters](kubernetes-clusters.md)
-- [Kubernetes Machines](kubernetes-machines.md)
-- [Persistent Control Plane](persistent-control-plane.md)
-- [HA Control Plane](ha-control-plane.md)
+- [KubernetesClusters](kubernetes-clusters.md)
+- [KubernetesMachines](kubernetes-machines.md)
+- [Remediation](remediation.md)
+- [Persistence](persistence.md)
 - [E2E Tests](e2e-tests.md)

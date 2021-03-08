@@ -29,16 +29,29 @@ spec:
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
-  name: ${CLUSTER_NAME}
+  name: ${CLUSTER_NAME}-controller
 spec:
   template:
     spec:
+      allowRecreation: true
       containers:
       - name: kind
         resources:
           requests:
             cpu: ${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS:="0"}
             memory: ${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS:="0"}
+        volumeMounts:
+        - name: var-lib-etcd
+          mountPath: /var/lib/etcd
+      volumeClaimTemplates:
+      - metadata:
+          name: var-lib-etcd
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: ${ETCD_STORAGE_SIZE:=10Gi}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
@@ -50,7 +63,7 @@ spec:
   infrastructureTemplate:
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
     kind: KubernetesMachineTemplate
-    name: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-controller
   kubeadmConfigSpec:
     initConfiguration:
       nodeRegistration:
@@ -83,6 +96,20 @@ spec:
             cgroups-per-qos: "false"
             enforce-node-allocatable: ""
 ---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: ${KUBERNETES_NODE_MACHINE_CPU_REQUESTS:="0"}
+            memory: ${KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS:="0"}
+---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
 metadata:
@@ -103,7 +130,7 @@ spec:
           kind: KubeadmConfigTemplate
       infrastructureRef:
         apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
-        name: ${CLUSTER_NAME}
+        name: ${CLUSTER_NAME}-worker
         kind: KubernetesMachineTemplate
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3

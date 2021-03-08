@@ -1,8 +1,8 @@
-# Kubernetes Machines
+# KubernetesMachines
 
 KubernetesMachine resources represent a Kubernetes Pod that will bootstrap to become a Kubernetes
-Node. The [KubernetesMachineSpec] exposes the full spec of the Pod with the name of the container
-running the Kubernetes components hardcoded to `kind`.
+Node. KubernetesMachines expose the full spec of the Pod with the name of the container running the
+Kubernetes components hardcoded to `kind`.
 
 For example, to set the resource requests of a controller KubernetesMachine, the following resource
 can be used:
@@ -47,5 +47,3 @@ spec:
 Currently some fields can not be changed, for example the `image` of the `kind` container is always
 set to `kindest/node` tagged with the Kubernetes version of the owning Machine, but this may change
 in future releases to support custom images.
-
-[KubernetesMachineSpec]: https://github.com/dippynark/cluster-api-provider-kubernetes/blob/c4948530d12eef1714f42e3552bd6e4b98f1f3e7/api/v1alpha2/kubernetesmachine_types.go#L33

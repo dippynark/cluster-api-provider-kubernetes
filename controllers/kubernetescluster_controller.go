@@ -336,5 +336,5 @@ func (r *KubernetesClusterReconciler) createClusterService(ctx context.Context, 
 }
 
 func clusterServiceName(cluster *clusterv1.Cluster) string {
-	return fmt.Sprintf("%s-lb", cluster.Name)
+	return fmt.Sprintf("%s-api-server", cluster.Name)
 }

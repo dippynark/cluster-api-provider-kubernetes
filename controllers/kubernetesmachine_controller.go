@@ -57,23 +57,34 @@ const (
 	defaultImageTag                    = "v1.17.0"
 	kindContainerName                  = "kind"
 	defaultAPIServerPort               = 6443
-	libModulesVolumeName               = "lib-modules"
-	libModulesVolumeMountPath          = "/lib/modules"
-	runVolumeName                      = "run"
-	runVolumeMountPath                 = "/run"
-	tmpVolumeName                      = "tmp"
-	tmpVolumeMountPath                 = "/tmp"
-	varLibVolumeName                   = "var-lib"
-	varLibVolumeMountPath              = "/var/lib"
-	varLogVolumeName                   = "var-log"
-	varLogVolumeMountPath              = "/var/log"
-	cloudInitScriptsVolumeName         = "cloud-init-scripts"
-	cloudInitScriptsVolumeMountPath    = "/opt/cloud-init"
-	cloudInitSystemdUnitsVolume        = "cloud-init-systemd-units"
-	etcSystemdSystem                   = "/etc/systemd/system"
-	cloudInitBootstrapScriptName       = "bootstrap.sh"
-	cloudInitInstallScriptName         = "install.sh"
-	cloudInitInstallScript             = `#!/bin/bash
+
+	// Volume mounts
+	libModulesVolumeName      = "lib-modules"
+	libModulesVolumeMountPath = "/lib/modules"
+	runVolumeName             = "run"
+	runVolumeMountPath        = "/run"
+	tmpVolumeName             = "tmp"
+	tmpVolumeMountPath        = "/tmp"
+	// Required to avoid error: `failed to create containerd task: failed to mount rootfs component`
+	varLibContainerdVolumeName      = "var-lib-containerd"
+	varLibContainerdVolumeMountPath = "/var/lib/containerd"
+	// Prevent logs and etcd data being written to the container filesystem
+	varLogVolumeName          = "var-log"
+	varLogVolumeMountPath     = "/var/log"
+	varLibEtcdVolumeName      = "var-lib-etcd"
+	varLibEtcdVolumeMountPath = "/var/lib/etcd"
+	// TODO: should we mount /dev/mapper by default? Probably best for users to add it if needed
+	// https://github.com/kubernetes-sigs/kind/issues/1416#issuecomment-600438973
+
+	cloudInitScriptsVolumeName                 = "cloud-init-scripts"
+	cloudInitScriptsVolumeMountPath            = "/opt/cloud-init"
+	cloudInitSystemdUnitsVolumeName            = "cloud-init-systemd-units"
+	kubeletSystemdServiceDropinVolumeName      = "etc-systemd-system-kubelet-service-d"
+	kubeletSystemdServiceDropinVolumeMountPath = "/etc/systemd/system/kubelet.service.d"
+	etcSystemdSystem                           = "/etc/systemd/system"
+	cloudInitBootstrapScriptName               = "bootstrap.sh"
+	cloudInitInstallScriptName                 = "install.sh"
+	cloudInitInstallScript                     = `#!/bin/bash
 
 set -o errexit
 set -o nounset
@@ -98,6 +109,13 @@ PathExists=/var/run/containerd/containerd.sock
 
 [Install]
 WantedBy=multi-user.target
+`
+	// Without this dropin, systemd keeps stopping the kubelet for kindest/node images built for kind
+	// v0.9.0+
+	// TODO: work out why this dropin is needed
+	kubeletSystemdServiceDropinFileName = "20-capk.conf"
+	kubeletSystemdServiceDropin         = `[Service]
+Type=forking
 `
 )
 
@@ -405,13 +423,15 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		Name:      machinePodName(kubernetesMachine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		if kubernetesMachine.Spec.ProviderID != nil {
-			// Machine pod was previous created so something has deleted it
-			// This could be due to the Node it was running on failing (for example)
-			// We rely on a higher level object for recreation
-			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-			kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
-			return ctrl.Result{}, nil
+		if !kubernetesMachine.Spec.AllowRecreation {
+			if kubernetesMachine.Spec.ProviderID != nil {
+				// Machine Pod was previous created so something has deleted it. This could be due to the
+				// Node it was running on failing (for example). We rely on a higher level object (i.e.
+				// MachineHealthCheck) for remediation if recreation is not allowed
+				kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+				kubernetesMachine.Status.SetFailureMessage(errors.New("Machine Pod cannot be found"))
+				return ctrl.Result{}, nil
+			}
 		}
 		return r.createMachinePod(ctx, cluster, machine, kubernetesMachine)
 	}
@@ -439,18 +459,21 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		return ctrl.Result{}, nil
 	}
 
-	// Make sure machine pod uid and providerID match
-	if getPodUIDFromProviderID(*kubernetesMachine.Spec.ProviderID) != string(machinePod.UID) {
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod UID has changed"))
+	// Handle deleting machine pod
+	if !machinePod.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !kubernetesMachine.Spec.AllowRecreation {
+			// If recreation is not allowed then fail fast
+			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
+			kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod has been deleted"))
+		}
 		return ctrl.Result{}, nil
 	}
 
-	// Handle deleting machine pod
-	if !machinePod.ObjectMeta.DeletionTimestamp.IsZero() {
-		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
-		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod has been deleted unexpectedly"))
-		return ctrl.Result{}, nil
+	// Create persistent volume claims
+	// TODO: set error phase/reason/message if irrecoverable error occurs
+	err = r.createPersistentVolumeClaims(kubernetesMachine)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create persistent volume claims")
 	}
 
 	// Generate cloud-init bootstrap script secret
@@ -475,13 +498,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
 		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("bootstrap Secret is not controlled by KubernetesMachine"))
 		return ctrl.Result{}, nil
-	}
-
-	// Create persistent volume claims
-	// TODO: set error phase/reason/message if irrecoverable error occurs
-	err = r.createPersistentVolumeClaims(kubernetesMachine)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to create persistent volume claims")
 	}
 
 	// Check status of kind container
@@ -674,10 +690,31 @@ func (r *KubernetesMachineReconciler) createControlPlaneMachinePod(ctx context.C
 	machinePod.Labels[clusterv1.MachineControlPlaneLabelName] = ""
 
 	// Set persistent volume claims
-	updateStorage(kubernetesMachine, machinePod)
+	err = r.updateStorage(kubernetesMachine, machinePod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// Set kind container
 	kindContainer := setKindContainerBase(machine, machinePod)
+
+	// Add etcd volume and mount if it doesn't already exist
+	varLibEtcdVolumeMissing := true
+	for _, volume := range machinePod.Spec.Volumes {
+		if volume.Name == varLibEtcdVolumeName {
+			varLibEtcdVolumeMissing = false
+		}
+	}
+	if varLibEtcdVolumeMissing {
+		varLibEtcdVolume := corev1.Volume{
+			Name: varLibEtcdVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibEtcdVolume)
+	}
+	setVolumeMount(kindContainer, varLibEtcdVolumeName, varLibEtcdVolumeMountPath, "", false)
 
 	// Set readiness probe
 	// The health check for an apiserver is a TCP connection check on its listening port
@@ -721,7 +758,10 @@ func (r *KubernetesMachineReconciler) createWorkerMachinePod(ctx context.Context
 	}
 
 	// Set persistent volume claims
-	updateStorage(kubernetesMachine, machinePod)
+	err = r.updateStorage(kubernetesMachine, machinePod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// Set kind container
 	setKindContainerBase(machine, machinePod)
@@ -748,16 +788,17 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	// TODO: revist this for extra containers e.g. sidecars
 	machinePod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
-	// Set volumes
-	// Inspired by kind's defaults
+	// Set volumes inspired by kind's defaults
 	// https://github.com/kubernetes-sigs/kind/blob/c8a82d8570b989988626c3f722f3a10c675f01f7/pkg/cluster/internal/providers/docker/provision.go#L167-L176
+	// Note that /var/lib/containerd isn't mounted by kind but is required on Kubernetes
 	tmpVolumeMissing := true
 	runVolumeMissing := true
 	libModulesVolumeMissing := true
-	varLibVolumeMissing := true
+	varLibContainerdVolumeMissing := true
 	varLogVolumeMissing := true
 	cloudInitScriptsVolumeMissing := true
 	cloudInitSystemdUnitsVolumeMissing := true
+	kubeletSystemdServiceDropinVolumeMissing := true
 	for _, volume := range machinePod.Spec.Volumes {
 		if volume.Name == tmpVolumeName {
 			tmpVolumeMissing = false
@@ -768,8 +809,8 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 		if volume.Name == libModulesVolumeName {
 			libModulesVolumeMissing = false
 		}
-		if volume.Name == varLibVolumeName {
-			varLibVolumeMissing = false
+		if volume.Name == varLibContainerdVolumeName {
+			varLibContainerdVolumeMissing = false
 		}
 		if volume.Name == varLogVolumeName {
 			varLogVolumeMissing = false
@@ -777,8 +818,11 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 		if volume.Name == cloudInitScriptsVolumeName {
 			cloudInitScriptsVolumeMissing = false
 		}
-		if volume.Name == cloudInitSystemdUnitsVolume {
+		if volume.Name == cloudInitSystemdUnitsVolumeName {
 			cloudInitSystemdUnitsVolumeMissing = false
+		}
+		if volume.Name == kubeletSystemdServiceDropinVolumeName {
+			kubeletSystemdServiceDropinVolumeMissing = false
 		}
 	}
 	if tmpVolumeMissing {
@@ -816,15 +860,20 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 		}
 		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, libModulesVolume)
 	}
-	if varLibVolumeMissing {
+	if varLibContainerdVolumeMissing {
 		varLibVolume := corev1.Volume{
-			Name: varLibVolumeName,
+			Name: varLibContainerdVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		}
 		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, varLibVolume)
 	}
+	// Mounting emptyDir to /var/log is not required for kind to function correctly but improves
+	// performance
+	// https://github.com/kubernetes-sigs/kind/blob/ca88477ac8054e0e7c3ae8d4f93a2ecfe10d5e79/pkg/cluster/internal/providers/docker/provision.go#L237-L242
+	// Note that in general we cannot mount over `/var` since some versions of the kindest/node image
+	// require `/var/lib/dpkg/alternatives` for `update-alternatives` to work
 	if varLogVolumeMissing {
 		varLogVolume := corev1.Volume{
 			Name: varLogVolumeName,
@@ -858,7 +907,7 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 	}
 	if cloudInitSystemdUnitsVolumeMissing {
 		cloudInitSystemdUnitsVolume := corev1.Volume{
-			Name: cloudInitSystemdUnitsVolume,
+			Name: cloudInitSystemdUnitsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: machinePodName(kubernetesMachine) + "-cloud-init",
@@ -876,6 +925,25 @@ func (r *KubernetesMachineReconciler) getMachinePodBase(cluster *clusterv1.Clust
 			},
 		}
 		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, cloudInitSystemdUnitsVolume)
+	}
+	// It doesn't really make sense putting this dropin in the cloud-init Secret since they are
+	// unrelated, but I was lazy
+	if kubeletSystemdServiceDropinVolumeMissing {
+		kubeletSystemdServiceDropinVolume := corev1.Volume{
+			Name: kubeletSystemdServiceDropinVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: machinePodName(kubernetesMachine) + "-cloud-init",
+					Items: []corev1.KeyToPath{
+						{
+							Key:  kubeletSystemdServiceDropinFileName,
+							Path: kubeletSystemdServiceDropinFileName,
+						},
+					},
+				},
+			},
+		}
+		machinePod.Spec.Volumes = append(machinePod.Spec.Volumes, kubeletSystemdServiceDropinVolume)
 	}
 
 	// Set controller reference
@@ -927,15 +995,20 @@ func setKindContainerBase(machine *clusterv1.Machine, machinePod *corev1.Pod) *c
 		kindContainer.SecurityContext.Privileged = pointer.BoolPtr(true)
 	}
 
+	// Set TTY
+	kindContainer.TTY = true
+
 	// Set volume mounts
 	setVolumeMount(kindContainer, tmpVolumeName, tmpVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, runVolumeName, runVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, libModulesVolumeName, libModulesVolumeMountPath, "", true)
-	setVolumeMount(kindContainer, varLibVolumeName, varLibVolumeMountPath, "", false)
+	setVolumeMount(kindContainer, varLibContainerdVolumeName, varLibContainerdVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, varLogVolumeName, varLogVolumeMountPath, "", false)
 	setVolumeMount(kindContainer, cloudInitScriptsVolumeName, cloudInitScriptsVolumeMountPath, "", false)
-	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdServiceUnitName), cloudInitSystemdServiceUnitName, false)
-	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolume, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
+	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolumeName, path.Join(etcSystemdSystem, cloudInitSystemdServiceUnitName), cloudInitSystemdServiceUnitName, false)
+	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolumeName, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
+	setVolumeMount(kindContainer, cloudInitSystemdUnitsVolumeName, path.Join(etcSystemdSystem, cloudInitSystemdPathUnitName), cloudInitSystemdPathUnitName, false)
+	setVolumeMount(kindContainer, kubeletSystemdServiceDropinVolumeName, path.Join(kubeletSystemdServiceDropinVolumeMountPath, kubeletSystemdServiceDropinFileName), kubeletSystemdServiceDropinFileName, false)
 
 	return kindContainer
 }

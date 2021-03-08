@@ -31,10 +31,11 @@ const (
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
-	// ProviderID is in the form
-	// `kubernetes://<podUID>`.
+	// ProviderID is in the form `kubernetes://<namespace>/<name>`.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+	// AllowRecreation allows machine Pod to be recreated
+	AllowRecreation bool `json:"allowRecreation,omitempty"`
 	// PodSpec forms the base of the Pod corresponding to the KubernetesMachine.
 	corev1.PodSpec `json:",inline"`
 	// VolumeClaimTemplates is a list of claims that PodSpec is allowed to

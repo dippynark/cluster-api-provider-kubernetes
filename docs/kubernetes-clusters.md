@@ -1,4 +1,4 @@
-# Kubernetes Clusters
+# KubernetesClusters
 
 KubernetesCluster resources represent a Kubernetes Service that can be used to reach the API
 Server(s) running on the controller Pod(s).

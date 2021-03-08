@@ -10,7 +10,7 @@ CONTROLLER_TOOLS_VERSION = v0.5.0
 
 CAPI_VERSION = v0.3.14
 CERT_MANAGER_VERSION = v0.16.1
-KUBERNETES_VERSION = v1.17.0
+KUBERNETES_VERSION = v1.20.2
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -29,20 +29,10 @@ manager: generate fmt vet
 run: generate fmt vet manifests
 	go run ./main.go
 
-# Install CRDs into a cluster
-install: manifests
-	kustomize build config/crd | kubectl apply -f -
-
-# Uninstall CRDs from a cluster
-uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
-
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config | kubectl apply -f -
-	# TODO: use aggregation label when available
-	kubectl apply -f release/kubeadm-control-plane-rbac.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
@@ -109,7 +99,7 @@ E2E_CONF_FILE  ?= $(CURDIR)/e2e/config/capk.yaml
 SKIP_RESOURCE_CLEANUP ?= false
 USE_EXISTING_CLUSTER ?= false
 .PHONY: e2e
-e2e: $(GINKGO) docker-build e2e_template
+e2e: $(GINKGO) docker-build e2e_template e2e_data
 	cd config/manager && kustomize edit set image controller=${IMG}
 	$(GINKGO) -v -trace -tags=e2e ./e2e -- \
 		-e2e.artifacts-folder="$(ARTIFACTS)" \

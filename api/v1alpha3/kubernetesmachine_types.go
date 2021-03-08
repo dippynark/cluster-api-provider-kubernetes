@@ -31,10 +31,11 @@ const (
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine
 type KubernetesMachineSpec struct {
-	// ProviderID is in the form
-	// `kubernetes://<podUID>`.
+	// ProviderID is in the form `kubernetes://<namespace>/<name>`.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+	// AllowRecreation allows machine Pod to be recreated
+	AllowRecreation bool `json:"allowRecreation,omitempty"`
 	// PodSpec forms the base of the Pod corresponding to the KubernetesMachine.
 	corev1.PodSpec `json:",inline"`
 	// VolumeClaimTemplates is a list of claims that PodSpec is allowed to
@@ -57,13 +58,13 @@ type KubernetesMachineStatus struct {
 	// reconciling the KubernetesMachine and will contain a succinct value
 	// suitable for machine interpretation.
 	// +optional
-	FailureReason *capierrors.MachineStatusError `json:"errorReason,omitempty"`
+	FailureReason *capierrors.MachineStatusError `json:"failureReason,omitempty"`
 
 	// FailureMessage will be set in the event that there is a terminal problem
 	// reconciling the KubernetesMachine and will contain a more verbose string
 	// suitable for logging and human consumption.
 	// +optional
-	FailureMessage *string `json:"errorMessage,omitempty"`
+	FailureMessage *string `json:"failureMessage,omitempty"`
 
 	// Phase represents the current phase of KubernetesMachine actuation.
 	// +optional
