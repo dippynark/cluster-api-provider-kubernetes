@@ -119,8 +119,8 @@ kubectl get nodes
 
 ```sh
 unset KUBECONFIG
-rm -f example-kubeconfig
-kubectl delete cluster example
+rm -f $CLUSTER_NAME-kubeconfig
+kubectl delete cluster $CLUSTER_NAME
 # If using the GKE example above
 yes | gcloud compute firewall-rules delete allow-$MANAGEMENT_CLUSTER_NAME-cluster-pods-ipip
 yes | gcloud container clusters delete $MANAGEMENT_CLUSTER_NAME --async
