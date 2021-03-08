@@ -85,6 +85,7 @@ export KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST="2Gi"
 export KUBERNETES_WORKER_MACHINE_CPU_REQUEST="1"
 export KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST="1Gi"
 clusterctl config cluster $CLUSTER_NAME \
+  --infrastructure=kubernetes \
   --kubernetes-version=v1.20.2 \
   --control-plane-machine-count=1 \
   --worker-machine-count=1 \
