@@ -17,7 +17,19 @@ patchesStrategicMerge:
   apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
   kind: KubernetesMachineTemplate
   metadata:
-    name: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-controller
+  spec:
+    template:
+      spec:
+        dnsConfig:
+          nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+- |-
+  apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+  kind: KubernetesMachineTemplate
+  metadata:
+    name: ${CLUSTER_NAME}-worker
   spec:
     template:
       spec:

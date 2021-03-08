@@ -66,6 +66,7 @@ providers:
 
 variables:
   KUBERNETES_VERSION: "v1.20.2"
+  KUBERNETES_CONTROL_PLANE_SERVICE_TYPE: "ClusterIP"
   CNI: "./data/cni/calico/calico.yaml"
   EXP_CLUSTER_RESOURCE_SET: "true"
 

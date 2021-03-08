@@ -73,7 +73,7 @@ spec:
       infrastructureRef:
         apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
         kind: KubernetesMachineTemplate
-        name: ${CLUSTER_NAME}
+        name: ${CLUSTER_NAME}-worker
       version: ${KUBERNETES_VERSION}
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
@@ -102,7 +102,7 @@ spec:
   infrastructureTemplate:
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
     kind: KubernetesMachineTemplate
-    name: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-controller
   kubeadmConfigSpec:
     clusterConfiguration:
       controllerManager:
@@ -128,12 +128,12 @@ kind: KubernetesCluster
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE:="ClusterIP"}
+  controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}
 ---
 apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
-  name: ${CLUSTER_NAME}
+  name: ${CLUSTER_NAME}-controller
 spec:
   template:
     spec:
@@ -141,8 +141,26 @@ spec:
       - name: kind
         resources:
           requests:
-            cpu: ${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS:="0"}
-            memory: ${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS:="0"}
+            cpu: ${KUBERNETES_CONTROLLER_MACHINE_CPU_REQUEST:="0"}
+            memory: ${KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST:="0"}
+      dnsConfig:
+        nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+---
+apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+kind: KubernetesMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker
+spec:
+  template:
+    spec:
+      containers:
+      - name: kind
+        resources:
+          requests:
+            cpu: ${KUBERNETES_WORKER_MACHINE_CPU_REQUEST:="0"}
+            memory: ${KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST:="0"}
       dnsConfig:
         nameservers:
         - 8.8.8.8
