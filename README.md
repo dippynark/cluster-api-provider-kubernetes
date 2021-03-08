@@ -97,9 +97,9 @@ until [ -n "`kubectl get secret $CLUSTER_NAME-kubeconfig -o jsonpath='{.data.val
 done
 kubectl get secret $CLUSTER_NAME-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > $CLUSTER_NAME-kubeconfig
 
-# Switch to new kind cluster
-# If the cluster api endpoint is not reachable from your machine you can exec into a
-# controller Node (Pod) and run `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
+# Switch to new Kubernetes cluster. If the cluster API Server endpoint is not reachable from your
+# local machine you can exec into a controller Node (Pod) and run
+# `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
 export KUBECONFIG=$CLUSTER_NAME-kubeconfig
 
 # Wait for the apiserver to come up
@@ -107,7 +107,8 @@ until kubectl get nodes &>/dev/null; do
   sleep 1
 done
 
-# Install Calico
+# Install Calico. This could also be done using a ClusterResourceSet
+# https://cluster-api.sigs.k8s.io/tasks/experimental-features/cluster-resource-set.html
 kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 # Interact with your new cluster!
