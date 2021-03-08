@@ -4,7 +4,7 @@ kind: KubernetesCluster
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE:="ClusterIP"}
+  controlPlaneServiceType: ${KUBERNETES_CONTROL_PLANE_SERVICE_TYPE}
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
@@ -38,8 +38,8 @@ spec:
       - name: kind
         resources:
           requests:
-            cpu: ${KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS:="0"}
-            memory: ${KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS:="0"}
+            cpu: ${KUBERNETES_CONTROLLER_MACHINE_CPU_REQUEST:="0"}
+            memory: ${KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST:="0"}
         volumeMounts:
         - name: var-lib-etcd
           mountPath: /var/lib/etcd
@@ -47,18 +47,19 @@ spec:
       - metadata:
           name: var-lib-etcd
         spec:
+          storageClassName: ${ETCD_STORAGE_CLASS_NAME}
           accessModes:
           - ReadWriteOnce
           resources:
             requests:
-              storage: ${ETCD_STORAGE_SIZE:=10Gi}
+              storage: ${ETCD_STORAGE_SIZE}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT:="1"}
   version: ${KUBERNETES_VERSION}
   infrastructureTemplate:
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
@@ -107,8 +108,8 @@ spec:
       - name: kind
         resources:
           requests:
-            cpu: ${KUBERNETES_NODE_MACHINE_CPU_REQUESTS:="0"}
-            memory: ${KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS:="0"}
+            cpu: ${KUBERNETES_WORKER_MACHINE_CPU_REQUEST:="0"}
+            memory: ${KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST:="0"}
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
@@ -116,7 +117,7 @@ metadata:
   name: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
-  replicas: ${WORKER_MACHINE_COUNT}
+  replicas: ${WORKER_MACHINE_COUNT:="1"}
   selector:
     matchLabels:
   template:

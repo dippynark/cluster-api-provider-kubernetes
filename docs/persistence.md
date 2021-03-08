@@ -28,9 +28,3 @@ spec:
         requests:
           storage: 10Gi
 ```
-
-The
-[release/cluster-template-persistent-control-plane.yaml](../release/cluster-template-persistent-control-plane.yaml)
-template configures persistent controller Machines using the default StorageClass. Note that it is
-[recommended to back etcd's storage with an
-SSD](https://etcd.io/docs/v3.3.12/op-guide/hardware/#disks).
