@@ -15,7 +15,7 @@ images:
   loadBehavior: tryLoad
 - name: quay.io/jetstack/cert-manager-cainjector:v0.16.1
   loadBehavior: tryLoad
-- name: kindest/node:v1.17.0
+- name: kindest/node:v1.20.2
   loadBehavior: tryLoad
 
 providers:
@@ -65,12 +65,7 @@ providers:
   - sourcePath: "../../release/metadata.yaml"
 
 variables:
-  KUBERNETES_VERSION: "v1.17.0"
-  KUBERNETES_CONTROL_PLANE_SERVICE_TYPE: "ClusterIP"
-  KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS: "0"
-  KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS: "0"
-  KUBERNETES_NODE_MACHINE_CPU_REQUESTS: "0"
-  KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS: "0"
+  KUBERNETES_VERSION: "v1.20.2"
   CNI: "./data/cni/calico/calico.yaml"
   EXP_CLUSTER_RESOURCE_SET: "true"
 

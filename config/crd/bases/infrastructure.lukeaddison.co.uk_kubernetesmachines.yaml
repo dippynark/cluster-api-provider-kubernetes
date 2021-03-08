@@ -311,6 +311,8 @@ spec:
                         type: array
                     type: object
                 type: object
+              allowRecreation:
+                type: boolean
               automountServiceAccountToken:
                 type: boolean
               containers:
@@ -3154,6 +3156,8 @@ spec:
                         type: array
                     type: object
                 type: object
+              allowRecreation:
+                type: boolean
               automountServiceAccountToken:
                 type: boolean
               containers:
@@ -5688,9 +5692,9 @@ spec:
             type: object
           status:
             properties:
-              errorMessage:
+              failureMessage:
                 type: string
-              errorReason:
+              failureReason:
                 type: string
               phase:
                 type: string

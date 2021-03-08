@@ -1,11 +1,13 @@
 # Kubernetes Cluster API Provider Kubernetes
 
-The [Cluster API] brings declarative, Kubernetes-style APIs to cluster creation,
-configuration and management.
+The [Cluster API](https://github.com/kubernetes-sigs/cluster-api) brings declarative,
+Kubernetes-style APIs to cluster creation, configuration and management.
 
-This project is a [Cluster API Infrastructure Provider] implementation using
-Kubernetes itself to provide the infrastructure. Pods running [kind] are
-created and configured to serve as Nodes which form a cluster.
+This project is a [Cluster API Infrastructure
+Provider](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure) implementation
+using Kubernetes itself to provide the infrastructure. Pods running
+[kind](https://github.com/kubernetes-sigs/kind) are created and configured to serve as Nodes which
+form a cluster.
 
 The primary use cases for this project are testing and experimentation.
 
@@ -20,10 +22,12 @@ Cluster API cluster as the inner cluster.
 
 Any recent Kubernetes cluster (1.16+) should be suitable for the outer cluster.
 
-We are going to use [Calico] as an overlay implementation for the inner cluster with [IP-in-IP
-encapsulation] enabled so that our outer cluster does not need to know about the inner cluster's Pod
-IP range. To make this work we need to ensure that the `ipip` kernel module is loadable and that
-IPv4 encapsulated packets are forwarded by the kernel.
+We are going to use [Calico](https://docs.projectcalico.org/v3.11/getting-started/kubernetes/) as an
+overlay implementation for the inner cluster with [IP-in-IP
+encapsulation](https://docs.projectcalico.org/v3.11/getting-started/kubernetes/installation/config-options#configuring-ip-in-ip)
+enabled so that our outer cluster does not need to know about the inner cluster's Pod IP range. To
+make this work we need to ensure that the `ipip` kernel module is loadable and that IPv4
+encapsulated packets are forwarded by the kernel.
 
 On GKE this can be accomplished as follows:
 
@@ -31,13 +35,14 @@ On GKE this can be accomplished as follows:
 # The GKE Ubuntu image includes the ipip kernel module
 # Calico handles loading the module if necessary
 # https://github.com/projectcalico/felix/blob/9469e77e0fa530523be915dfaa69cc42d30b8317/dataplane/linux/ipip_mgr.go#L107-L110
-gcloud container clusters create management \
+MANAGEMENT_CLUSTER_NAME="management"
+gcloud container clusters create $MANAGEMENT_CLUSTER_NAME \
   --image-type=UBUNTU \
   --machine-type=n1-standard-4
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
-CLUSTER_CIDR=`gcloud container clusters describe management --format="value(clusterIpv4Cidr)"`
-gcloud compute firewall-rules create allow-management-cluster-pods-ipip \
+CLUSTER_CIDR=`gcloud container clusters describe $MANAGEMENT_CLUSTER_NAME --format="value(clusterIpv4Cidr)"`
+gcloud compute firewall-rules create allow-$MANAGEMENT_CLUSTER_NAME-cluster-pods-ipip \
   --source-ranges=$CLUSTER_CIDR \
   --allow=ipip
 
@@ -71,28 +76,30 @@ clusterctl init --infrastructure kubernetes
 ### Configuration
 
 ```sh
+CLUSTER_NAME="example"
+
 # Use ClusterIP for clusters that do not support Services of type LoadBalancer
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
 export KUBERNETES_CONTROL_PLANE_MACHINE_CPU_REQUESTS="1"
 export KUBERNETES_CONTROL_PLANE_MACHINE_MEMORY_REQUESTS="1Gi"
 export KUBERNETES_NODE_MACHINE_CPU_REQUESTS="1"
 export KUBERNETES_NODE_MACHINE_MEMORY_REQUESTS="1Gi"
-clusterctl config cluster example \
-  --kubernetes-version=v1.17.0 \
+clusterctl config cluster $CLUSTER_NAME \
+  --kubernetes-version=v1.20.2 \
   --control-plane-machine-count=1 \
   --worker-machine-count=1 \
   | kubectl apply -f -
 
 # Retrieve kubeconfig
-until [ -n "`kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' 2>/dev/null`" ] ; do
+until [ -n "`kubectl get secret $CLUSTER_NAME-kubeconfig -o jsonpath='{.data.value}' 2>/dev/null`" ] ; do
   sleep 1
 done
-kubectl get secret example-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > example-kubeconfig
+kubectl get secret $CLUSTER_NAME-kubeconfig -o jsonpath='{.data.value}' | base64 --decode > $CLUSTER_NAME-kubeconfig
 
-# Switch to example cluster
+# Switch to new kind cluster
 # If the cluster api endpoint is not reachable from your machine you can exec into a
 # controller Node (Pod) and run `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
-export KUBECONFIG=example-kubeconfig
+export KUBECONFIG=$CLUSTER_NAME-kubeconfig
 
 # Wait for the apiserver to come up
 until kubectl get nodes &>/dev/null; do
@@ -113,13 +120,16 @@ unset KUBECONFIG
 rm -f example-kubeconfig
 kubectl delete cluster example
 # If using the GKE example above
-yes | gcloud compute firewall-rules delete allow-management-cluster-pods-ipip
-yes | gcloud container clusters delete management --async
+yes | gcloud compute firewall-rules delete allow-$MANAGEMENT_CLUSTER_NAME-cluster-pods-ipip
+yes | gcloud container clusters delete $MANAGEMENT_CLUSTER_NAME --async
 ```
 
-[Cluster API]: https://github.com/kubernetes-sigs/cluster-api
-[Cluster API Infrastructure Provider]: https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure
-[kind]: https://github.com/kubernetes-sigs/kind
-[LoadBalancer Service]: https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
-[Calico]: https://docs.projectcalico.org/v3.11/getting-started/kubernetes/
-[IP-in-IP encapsulation]: https://docs.projectcalico.org/v3.11/getting-started/kubernetes/installation/config-options#configuring-ip-in-ip
+## TODO
+
+- Implement finalizer for control plane Pods to prevent deletion that'd lose quorum (i.e. PDB)
+- Work out why KCP replicas 3 has 0 failure tolerance
+  - https://github.com/kubernetes-sigs/cluster-api/blob/master/controlplane/kubeadm/controllers/remediation.go#L158-L159
+- Document how to configure persistence
+- Fix persistent control plane with 3 nodes
+- Default cluster service type to ClusterIP
+  - https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html

@@ -27,6 +27,7 @@ func (src *KubernetesMachine) ConvertTo(dstRaw conversion.Hub) error {
 	dst.ObjectMeta = src.ObjectMeta
 
 	dst.Spec.ProviderID = src.Spec.ProviderID
+	dst.Spec.AllowRecreation = src.Spec.AllowRecreation
 	dst.Spec.PodSpec = src.Spec.PodSpec
 	dst.Spec.VolumeClaimTemplates = src.Spec.VolumeClaimTemplates
 
@@ -46,6 +47,7 @@ func (dst *KubernetesMachine) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.ObjectMeta = src.ObjectMeta
 
 	dst.Spec.ProviderID = src.Spec.ProviderID
+	dst.Spec.AllowRecreation = src.Spec.AllowRecreation
 	dst.Spec.PodSpec = src.Spec.PodSpec
 	dst.Spec.VolumeClaimTemplates = src.Spec.VolumeClaimTemplates
 

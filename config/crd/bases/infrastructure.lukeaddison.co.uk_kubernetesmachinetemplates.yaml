@@ -299,6 +299,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      allowRecreation:
+                        type: boolean
                       automountServiceAccountToken:
                         type: boolean
                       containers:
@@ -3121,6 +3123,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      allowRecreation:
+                        type: boolean
                       automountServiceAccountToken:
                         type: boolean
                       containers:

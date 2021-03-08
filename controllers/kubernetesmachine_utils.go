@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	capkv1 "github.com/dippynark/cluster-api-provider-kubernetes/api/v1alpha3"
 	"github.com/dippynark/cluster-api-provider-kubernetes/pkg/cloudinit"
@@ -24,16 +23,23 @@ const (
 	providerIDPrefix = "kubernetes://"
 )
 
-func getPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) map[string]corev1.PersistentVolumeClaim {
+func (r *KubernetesMachineReconciler) getPersistentVolumeClaims(kubernetesMachine *capkv1.KubernetesMachine) (map[string]corev1.PersistentVolumeClaim, error) {
 	templates := kubernetesMachine.Spec.VolumeClaimTemplates
 	claims := make(map[string]corev1.PersistentVolumeClaim, len(templates))
 	for i := range templates {
 		claim := templates[i]
 		claim.Name = getPersistentVolumeClaimName(kubernetesMachine, &claim)
 		claim.Namespace = kubernetesMachine.Namespace
+
+		// Set controller reference to ensure PVC is cleaned up upon KubernetesMachine delete. This
+		// differs from StatefulSet behaviour
+		if err := controllerutil.SetControllerReference(kubernetesMachine, &claim, r.Scheme); err != nil {
+			return nil, err
+		}
+
 		claims[templates[i].Name] = claim
 	}
-	return claims
+	return claims, nil
 }
 
 func getPersistentVolumeClaimName(kubernetesMachine *capkv1.KubernetesMachine, claim *corev1.PersistentVolumeClaim) string {
@@ -48,8 +54,12 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 	// this potentially triggers many nop loops - do something about this
 	// ReplicaSet controller seems to do this too so maybe this is okay
 	// https://github.com/kubernetes/kubernetes/blob/ff975e865df4ff941688c98a0bb02db7fae28dfe/pkg/controller/replicaset/replica_set.go#L741
-	for _, claim := range getPersistentVolumeClaims(kubernetesMachine) {
-		_, err := r.CoreV1Client.PersistentVolumeClaims(claim.Namespace).Get(claim.Name, metav1.GetOptions{})
+	claims, err := r.getPersistentVolumeClaims(kubernetesMachine)
+	if err != nil {
+		return err
+	}
+	for _, claim := range claims {
+		_, err := r.CoreV1Client.PersistentVolumeClaims(kubernetesMachine.Namespace).Get(claim.Name, metav1.GetOptions{})
 		switch {
 		case k8serrors.IsNotFound(err):
 			_, err := r.CoreV1Client.PersistentVolumeClaims(claim.Namespace).Create(&claim)
@@ -67,9 +77,12 @@ func (r *KubernetesMachineReconciler) createPersistentVolumeClaims(kubernetesMac
 // updateStorage updates pod's Volumes to conform with the PersistentVolumeClaim
 // of kubernetesMachine's templates. If pod has conflicting local Volumes these
 // are replaced with Volumes that conform to the kubernetesMachine's templates.
-func updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *corev1.Pod) {
+func (r *KubernetesMachineReconciler) updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *corev1.Pod) error {
 	currentVolumes := machinePod.Spec.Volumes
-	claims := getPersistentVolumeClaims(kubernetesMachine)
+	claims, err := r.getPersistentVolumeClaims(kubernetesMachine)
+	if err != nil {
+		return err
+	}
 	newVolumes := make([]corev1.Volume, 0, len(claims))
 	for name, claim := range claims {
 		newVolumes = append(newVolumes, corev1.Volume{
@@ -89,6 +102,8 @@ func updateStorage(kubernetesMachine *capkv1.KubernetesMachine, machinePod *core
 		}
 	}
 	machinePod.Spec.Volumes = newVolumes
+
+	return nil
 }
 
 func (r *KubernetesMachineReconciler) getBootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
@@ -131,10 +146,11 @@ func (r *KubernetesMachineReconciler) generatateCloudInitSecret(cluster *cluster
 			},
 		},
 		StringData: map[string]string{
-			cloudInitBootstrapScriptName:    cloudInitScript,
-			cloudInitInstallScriptName:      cloudInitInstallScript,
-			cloudInitSystemdServiceUnitName: cloudInitSystemdServiceUnit,
-			cloudInitSystemdPathUnitName:    cloudInitSystemdPathUnit,
+			cloudInitBootstrapScriptName:        cloudInitScript,
+			cloudInitInstallScriptName:          cloudInitInstallScript,
+			cloudInitSystemdServiceUnitName:     cloudInitSystemdServiceUnit,
+			cloudInitSystemdPathUnitName:        cloudInitSystemdPathUnit,
+			kubeletSystemdServiceDropinFileName: kubeletSystemdServiceDropin,
 		},
 	}
 
@@ -221,15 +237,9 @@ func getProviderIDFromPod(machinePod *corev1.Pod) (string, error) {
 	if machinePod == nil {
 		return "", errors.New("Machine Pod is nil")
 	}
-	if machinePod.UID == "" {
-		return "", errors.New("Machine Pod UID is empty")
-	}
-	// TODO: is there some more standard format for this?
-	return providerIDPrefix + string(machinePod.UID), nil
-}
-
-func getPodUIDFromProviderID(providerID string) string {
-	return strings.TrimPrefix(providerID, providerIDPrefix)
+	// We cannot use the Pod UID for the provider ID since we need it to stay constant accross Pod
+	// recreates when the kubernetesMachine.spec.allowRecreation field is set
+	return providerIDPrefix + string(machinePod.Namespace) + "/" + string(machinePod.Name), nil
 }
 
 func kubeconfigSecretName(cluster *clusterv1.Cluster) string {
