@@ -99,7 +99,7 @@ E2E_CONF_FILE  ?= $(CURDIR)/e2e/config/capk.yaml
 SKIP_RESOURCE_CLEANUP ?= false
 USE_EXISTING_CLUSTER ?= false
 .PHONY: e2e
-e2e: $(GINKGO) docker-build e2e_template e2e_data
+e2e: $(GINKGO) docker-build e2e_pull e2e_template e2e_data
 	cd config/manager && kustomize edit set image controller=${IMG}
 	$(GINKGO) -v -trace -tags=e2e ./e2e -- \
 		-e2e.artifacts-folder="$(ARTIFACTS)" \
