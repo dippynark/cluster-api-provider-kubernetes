@@ -134,6 +134,7 @@ yes | gcloud container clusters delete $MANAGEMENT_CLUSTER_NAME --async
 - Implement finalizer for control plane Pods to prevent deletion that'd lose quorum (i.e. PDB)
 - Work out why KCP replicas 3 has 0 failure tolerance
   - https://github.com/kubernetes-sigs/cluster-api/blob/master/controlplane/kubeadm/controllers/remediation.go#L158-L159
-- Improve performance of persistent control plane with 3 nodes
+- Improve performance of control plane
+- Improve recovery of persistent control plane with 3 nodes
 - Default cluster service type to ClusterIP
   - https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
