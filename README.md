@@ -5,7 +5,8 @@ Kubernetes-style APIs to cluster creation, configuration and management.
 
 This project is a [Cluster API Infrastructure
 Provider](https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure) implementation
-using Kubernetes itself to provide the infrastructure. Pods running
+using Kubernetes itself to provide the infrastructure. Pods using the
+[kindest/node](https://hub.docker.com/r/kindest/node/) image built for
 [kind](https://github.com/kubernetes-sigs/kind) are created and configured to serve as Nodes which
 form a cluster.
 
@@ -60,7 +61,7 @@ curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$CLUSTE
 chmod +x ./clusterctl
 sudo mv ./clusterctl /usr/local/bin/clusterctl
 
-# Add the Kubernetes infrastructure provider
+# Configure the Kubernetes infrastructure provider
 mkdir -p $HOME/.cluster-api
 cat > $HOME/.cluster-api/clusterctl.yaml <<EOF
 providers:
@@ -84,11 +85,13 @@ export KUBERNETES_CONTROLLER_MACHINE_CPU_REQUEST="1"
 export KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST="2Gi"
 export KUBERNETES_WORKER_MACHINE_CPU_REQUEST="1"
 export KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST="1Gi"
+# See kind releases for other available image versions of kindest/node
+# https://github.com/kubernetes-sigs/kind/releases
 clusterctl config cluster $CLUSTER_NAME \
-  --infrastructure=kubernetes \
-  --kubernetes-version=v1.20.2 \
-  --control-plane-machine-count=1 \
-  --worker-machine-count=1 \
+  --infrastructure kubernetes \
+  --kubernetes-version v1.20.2 \
+  --control-plane-machine-count 1 \
+  --worker-machine-count 1 \
   | kubectl apply -f -
 
 # Retrieve kubeconfig
@@ -102,7 +105,7 @@ kubectl get secret $CLUSTER_NAME-kubeconfig -o jsonpath='{.data.value}' | base64
 # `export KUBECONFIG=/etc/kubernetes/admin.conf` instead
 export KUBECONFIG=$CLUSTER_NAME-kubeconfig
 
-# Wait for the apiserver to come up
+# Wait for the API Server to come up
 until kubectl get nodes &>/dev/null; do
   sleep 1
 done
@@ -131,7 +134,6 @@ yes | gcloud container clusters delete $MANAGEMENT_CLUSTER_NAME --async
 - Implement finalizer for control plane Pods to prevent deletion that'd lose quorum (i.e. PDB)
 - Work out why KCP replicas 3 has 0 failure tolerance
   - https://github.com/kubernetes-sigs/cluster-api/blob/master/controlplane/kubeadm/controllers/remediation.go#L158-L159
-- Document how to configure persistence
-- Fix persistent control plane with 3 nodes
+- Improve performance of persistent control plane with 3 nodes
 - Default cluster service type to ClusterIP
   - https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html

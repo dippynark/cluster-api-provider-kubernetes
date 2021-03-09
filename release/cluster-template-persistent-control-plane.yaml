@@ -59,7 +59,7 @@ kind: KubeadmControlPlane
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  replicas: ${CONTROL_PLANE_MACHINE_COUNT:="1"}
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
   version: ${KUBERNETES_VERSION}
   infrastructureTemplate:
     apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
@@ -117,7 +117,7 @@ metadata:
   name: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
-  replicas: ${WORKER_MACHINE_COUNT:="1"}
+  replicas: ${WORKER_MACHINE_COUNT}
   selector:
     matchLabels:
   template:
