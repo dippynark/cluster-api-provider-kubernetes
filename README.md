@@ -81,10 +81,10 @@ CLUSTER_NAME="example"
 
 # Use ClusterIP for clusters that do not support Services of type LoadBalancer
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
-export KUBERNETES_CONTROLLER_MACHINE_CPU_REQUEST="1"
-export KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST="2Gi"
-export KUBERNETES_WORKER_MACHINE_CPU_REQUEST="1"
-export KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST="1Gi"
+export KUBERNETES_CONTROLLER_MACHINE_CPU_REQUEST="500m"
+export KUBERNETES_CONTROLLER_MACHINE_MEMORY_REQUEST="1Gi"
+export KUBERNETES_WORKER_MACHINE_CPU_REQUEST="200m"
+export KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST="512Mi"
 # See kind releases for other available image versions of kindest/node
 # https://github.com/kubernetes-sigs/kind/releases
 clusterctl config cluster $CLUSTER_NAME \
