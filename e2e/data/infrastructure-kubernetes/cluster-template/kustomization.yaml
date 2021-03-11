@@ -14,7 +14,7 @@ patchesStrategicMerge:
 # Using outer kind's kube-dns server yields containerd pull errors
 # TODO: work out why this fails when below nameservers are not specified
 - |-
-  apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+  apiVersion: infrastructure.dippynark.co.uk/v1alpha3
   kind: KubernetesMachineTemplate
   metadata:
     name: ${CLUSTER_NAME}-controller
@@ -26,7 +26,7 @@ patchesStrategicMerge:
           - 8.8.8.8
           - 8.8.4.4
 - |-
-  apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+  apiVersion: infrastructure.dippynark.co.uk/v1alpha3
   kind: KubernetesMachineTemplate
   metadata:
     name: ${CLUSTER_NAME}-worker

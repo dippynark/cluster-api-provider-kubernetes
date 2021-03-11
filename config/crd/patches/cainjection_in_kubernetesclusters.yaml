@@ -5,4 +5,4 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
-  name: kubernetesclusters.infrastructure.lukeaddison.co.uk
+  name: kubernetesclusters.infrastructure.dippynark.co.uk

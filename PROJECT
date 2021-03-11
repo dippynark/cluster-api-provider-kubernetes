@@ -1,4 +1,4 @@
-domain: lukeaddison.co.uk
+domain: dippynark.co.uk
 repo: github.com/dippynark/cluster-api-provider-kubernetes
 resources:
 - group: infrastructure

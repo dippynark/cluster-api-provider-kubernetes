@@ -26,7 +26,7 @@ const (
 	// KubernetesMachineFinalizer allows ReconcileKubernetesMachine to clean up
 	// resources associated with KubernetesMachine before removing it from the
 	// API Server.
-	KubernetesMachineFinalizer = "kubernetesmachine.infrastructure.lukeaddison.co.uk"
+	KubernetesMachineFinalizer = "kubernetesmachine.infrastructure.dippynark.co.uk"
 )
 
 // KubernetesMachineSpec defines the desired state of KubernetesMachine

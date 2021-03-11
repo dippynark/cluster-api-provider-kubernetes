@@ -1,4 +1,4 @@
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha2
+apiVersion: infrastructure.dippynark.co.uk/v1alpha2
 kind: KubernetesMachineTemplate
 metadata:
   name: kubernetesmachinetemplate-sample

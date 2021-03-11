@@ -26,7 +26,7 @@ const (
 	// KubernetesClusterFinalizer allows KubernetesClusterReconciler to clean up
 	// resources associated with a KubernetesCluster before removing it from the
 	// API Server.
-	KubernetesClusterFinalizer = "kubernetescluster.infrastructure.lukeaddison.co.uk"
+	KubernetesClusterFinalizer = "kubernetescluster.infrastructure.dippynark.co.uk"
 )
 
 // KubernetesClusterSpec defines the desired state of KubernetesCluster

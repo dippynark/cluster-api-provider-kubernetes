@@ -6,7 +6,7 @@ metadata:
     cluster.x-k8s.io/aggregate-to-manager: "true"
 rules:
 - apiGroups:
-  - infrastructure.lukeaddison.co.uk
+  - infrastructure.dippynark.co.uk
   resources:
   - kubernetesclusters
   - kubernetesmachines

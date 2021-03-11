@@ -13,17 +13,17 @@ patchesJson6902:
     group: apiextensions.k8s.io
     version: v1
     kind: CustomResourceDefinition
-    name: kubernetesclusters.infrastructure.lukeaddison.co.uk
+    name: kubernetesclusters.infrastructure.dippynark.co.uk
   path: patch_crd_webhook_namespace.yaml
 - target:
     group: apiextensions.k8s.io
     version: v1
     kind: CustomResourceDefinition
-    name: kubernetesmachines.infrastructure.lukeaddison.co.uk
+    name: kubernetesmachines.infrastructure.dippynark.co.uk
   path: patch_crd_webhook_namespace.yaml
 - target:
     group: apiextensions.k8s.io
     version: v1
     kind: CustomResourceDefinition
-    name: kubernetesmachinetemplates.infrastructure.lukeaddison.co.uk
+    name: kubernetesmachinetemplates.infrastructure.dippynark.co.uk
   path: patch_crd_webhook_namespace.yaml

@@ -12,13 +12,13 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha3-kubernetesmachine
+      path: /mutate-infrastructure-dippynark-co-uk-v1alpha3-kubernetesmachine
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: mkubernetesmachine.kb.io
   rules:
   - apiGroups:
-    - infrastructure.lukeaddison.co.uk
+    - infrastructure.dippynark.co.uk
     apiVersions:
     - v1alpha3
     operations:
@@ -33,13 +33,13 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-lukeaddison-co-uk-v1alpha2-kubernetesmachine
+      path: /mutate-infrastructure-dippynark-co-uk-v1alpha2-kubernetesmachine
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: mkubernetesmachine.kb.io
   rules:
   - apiGroups:
-    - infrastructure.lukeaddison.co.uk
+    - infrastructure.dippynark.co.uk
     apiVersions:
     - v1alpha2
     operations:

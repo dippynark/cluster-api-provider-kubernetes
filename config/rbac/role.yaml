@@ -65,7 +65,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - infrastructure.lukeaddison.co.uk
+  - infrastructure.dippynark.co.uk
   resources:
   - kubernetesclusters
   verbs:
@@ -77,7 +77,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - infrastructure.lukeaddison.co.uk
+  - infrastructure.dippynark.co.uk
   resources:
   - kubernetesclusters/status
   verbs:
@@ -85,7 +85,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - infrastructure.lukeaddison.co.uk
+  - infrastructure.dippynark.co.uk
   resources:
   - kubernetesmachines
   verbs:
@@ -97,7 +97,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - infrastructure.lukeaddison.co.uk
+  - infrastructure.dippynark.co.uk
   resources:
   - kubernetesmachines/status
   verbs:

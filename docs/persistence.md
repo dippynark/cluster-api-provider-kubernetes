@@ -7,7 +7,7 @@ with the same name. For controller Machines, by mounting a PersistentVolume at t
 directory, the Pod can recover without data loss and without the managing KubernetesMachine failing:
 
 ```yaml
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesMachine
 metadata:
   name: controller

@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
-  name: kubernetesmachines.infrastructure.lukeaddison.co.uk
+  name: kubernetesmachines.infrastructure.dippynark.co.uk
 spec:
-  group: infrastructure.lukeaddison.co.uk
+  group: infrastructure.dippynark.co.uk
   names:
     categories:
     - cluster-api

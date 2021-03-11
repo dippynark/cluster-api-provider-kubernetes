@@ -8,7 +8,7 @@ For example, to set the resource requests of a controller KubernetesMachine, the
 can be used:
 
 ```yaml
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesMachine
 metadata:
   name: controller
@@ -25,7 +25,7 @@ Similarly, to distribute a set of workers across Nodes of the management cluster
 KubernetesMachineTemplate could be used in a MachineDeployment:
 
 ```yaml
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
   name: worker

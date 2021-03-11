@@ -1,5 +1,5 @@
 ---
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesCluster
 metadata:
   name: ${CLUSTER_NAME}
@@ -18,7 +18,7 @@ spec:
       cidrBlocks: ${POD_CIDR:=["192.168.0.0/16"]}
     serviceDomain: ${SERVICE_DOMAIN:="cluster.local"}
   infrastructureRef:
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    apiVersion: infrastructure.dippynark.co.uk/v1alpha3
     kind: KubernetesCluster
     name: ${CLUSTER_NAME}
   controlPlaneRef:
@@ -26,7 +26,7 @@ spec:
     kind: KubeadmControlPlane
     name: ${CLUSTER_NAME}
 ---
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-controller
@@ -62,7 +62,7 @@ spec:
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
   version: ${KUBERNETES_VERSION}
   infrastructureTemplate:
-    apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+    apiVersion: infrastructure.dippynark.co.uk/v1alpha3
     kind: KubernetesMachineTemplate
     name: ${CLUSTER_NAME}-controller
   kubeadmConfigSpec:
@@ -97,7 +97,7 @@ spec:
             cgroups-per-qos: "false"
             enforce-node-allocatable: ""
 ---
-apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+apiVersion: infrastructure.dippynark.co.uk/v1alpha3
 kind: KubernetesMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-worker
@@ -130,7 +130,7 @@ spec:
           name: ${CLUSTER_NAME}
           kind: KubeadmConfigTemplate
       infrastructureRef:
-        apiVersion: infrastructure.lukeaddison.co.uk/v1alpha3
+        apiVersion: infrastructure.dippynark.co.uk/v1alpha3
         name: ${CLUSTER_NAME}-worker
         kind: KubernetesMachineTemplate
 ---

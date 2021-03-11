@@ -15,7 +15,7 @@ limitations under the License.
 
 // Package v1alpha3 contains API Schema definitions for the infrastructure v1alpha3 API group
 // +kubebuilder:object:generate=true
-// +groupName=infrastructure.lukeaddison.co.uk
+// +groupName=infrastructure.dippynark.co.uk
 package v1alpha3
 
 import (
@@ -25,7 +25,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "infrastructure.lukeaddison.co.uk", Version: "v1alpha3"}
+	GroupVersion = schema.GroupVersion{Group: "infrastructure.dippynark.co.uk", Version: "v1alpha3"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
