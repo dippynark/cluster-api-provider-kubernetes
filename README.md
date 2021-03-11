@@ -39,7 +39,7 @@ On GKE this can be accomplished as follows:
 MANAGEMENT_CLUSTER_NAME="management"
 gcloud container clusters create $MANAGEMENT_CLUSTER_NAME \
   --image-type=UBUNTU \
-  --machine-type=n1-standard-4
+  --machine-type=n1-standard-2
 
 # Allow IP-in-IP traffic between outer cluster Nodes from inner cluster Pods
 CLUSTER_CIDR=`gcloud container clusters describe $MANAGEMENT_CLUSTER_NAME --format="value(clusterIpv4Cidr)"`
