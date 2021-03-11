@@ -423,7 +423,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		Name:      machinePodName(kubernetesMachine),
 	}, machinePod)
 	if k8serrors.IsNotFound(err) {
-		if !kubernetesMachine.Spec.AllowRecreation {
+		if kubernetesMachine.Spec.AllowRecreation {
+			kubernetesMachine.Status.Ready = false
+		} else {
 			if kubernetesMachine.Spec.ProviderID != nil {
 				// Machine Pod was previous created so something has deleted it. This could be due to the
 				// Node it was running on failing (for example). We rely on a higher level object (i.e.
@@ -461,7 +463,9 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 
 	// Handle deleting machine pod
 	if !machinePod.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !kubernetesMachine.Spec.AllowRecreation {
+		if kubernetesMachine.Spec.AllowRecreation {
+			kubernetesMachine.Status.Ready = false
+		} else {
 			// If recreation is not allowed then fail fast
 			kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
 			kubernetesMachine.Status.SetFailureMessage(errors.Errorf("Machine Pod has been deleted"))
@@ -543,7 +547,6 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 	}
 
 	// Mark the kubernetesMachine ready
-	// TODO: should ready ever go back to false?
 	kubernetesMachine.Status.Ready = true
 
 	return ctrl.Result{}, nil
@@ -595,19 +598,18 @@ func (r *KubernetesMachineReconciler) reconcilePhase(k *capkv1.KubernetesMachine
 		k.Status.Phase = capkv1.KubernetesMachinePhasePending
 	}
 
-	// Set phase to "Provisioning" if the providerID has been set
-	if k.Spec.ProviderID != nil {
+	// Set phase to "Provisioning" if the providerID has been set and the KubernetesMachine is not
+	// ready
+	if k.Spec.ProviderID != nil && !k.Status.Ready {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseProvisioning
 	}
 
-	// Set phase to "Running" if providerID has been set and the
-	// KubernetesMachine is ready
+	// Set phase to "Running" if the providerID has been set and the KubernetesMachine is ready
 	if k.Spec.ProviderID != nil && k.Status.Ready {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseRunning
 	}
 
-	// Set phase to "Failed" if any of Status.FailureReason or Status.FailureMessage
-	// is not-nil
+	// Set phase to "Failed" if either of Status.FailureReason or Status.FailureMessage is not nil
 	if k.Status.FailureReason != nil || k.Status.FailureMessage != nil {
 		k.Status.Phase = capkv1.KubernetesMachinePhaseFailed
 	}
