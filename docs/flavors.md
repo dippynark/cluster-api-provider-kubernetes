@@ -7,6 +7,14 @@ creating clusters. Flavors are YAML templates that can be hydrated using
 
 ## Default
 
+The default flavor creates a Kubernetes cluster with the controller Nodes managed by a
+[KubeadmControlPlane](https://github.com/kubernetes-sigs/cluster-api/blob/master/docs/proposals/20191017-kubeadm-based-control-plane.md)
+resource and the worker Nodes managed by a
+[MachineDeployment](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-deployment.html)
+resource. The controller Nodes write etcd state to the container file system and the corresponding
+KubernetesMachines will fail if the underlying Pods fails, relying on the
+KubeadmControlPlane for remediation.
+
 ```sh
 CLUSTER_NAME="example"
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
@@ -34,6 +42,15 @@ clusterctl config cluster $CLUSTER_NAME \
 | WORKER_MACHINE_COUNT | Yes | |
 
 ## Persistent Control Plane
+
+The persistent control plane flavor creates a Kubernetes cluster with the controller Nodes managed
+by a
+[KubeadmControlPlane](https://github.com/kubernetes-sigs/cluster-api/blob/master/docs/proposals/20191017-kubeadm-based-control-plane.md)
+resource and the worker Nodes managed by a
+[MachineDeployment](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-deployment.html)
+resource. PersistentVolumes are dynamically provisioned for the controller Nodes to write etcd state
+and the corresponding KubernetesMachines are configured to recreate the underlying Pod if it is
+deleted as described in [persistence.md](persistence.md).
 
 ```sh
 CLUSTER_NAME="example"
