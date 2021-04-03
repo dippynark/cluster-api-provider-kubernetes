@@ -131,7 +131,7 @@ type KubernetesMachineReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.dippynark.co.uk,resources=kubernetesmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.dippynark.co.uk,resources=kubernetesmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create
@@ -215,7 +215,7 @@ func (r *KubernetesMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	// Handle deleted machines
 	if !kubernetesMachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, machine, kubernetesMachine)
+		return r.reconcileDelete(ctx, machine, kubernetesMachine, cluster)
 	}
 
 	// Make sure infrastructure is ready
@@ -511,6 +511,13 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 		return ctrl.Result{}, nil
 	}
 	if kindContainerStatus.State.Terminated != nil {
+
+		if kubernetesMachine.Spec.AllowRecreation {
+			// Delete Pod to allow it to be recreated
+			log.Info("Deleting Pod due to terminated kind container")
+			return ctrl.Result{}, r.Delete(ctx, machinePod)
+		}
+
 		kubernetesMachine.Status.SetFailureReason(capierrors.UnsupportedChangeMachineError)
 		kubernetesMachine.Status.SetFailureMessage(errors.Errorf("kind container has terminated: %s", kindContainerStatus.State.Terminated.Reason))
 
@@ -552,11 +559,11 @@ func (r *KubernetesMachineReconciler) reconcileNormal(ctx context.Context, clust
 	return ctrl.Result{}, nil
 }
 
-func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine) (ctrl.Result, error) {
-	// If the deleted machine is a control-plane node, exec kubeadm reset so the
-	// etcd member hosted on the machine gets removed in a controlled way
-
-	if util.IsControlPlaneMachine(machine) {
+func (r *KubernetesMachineReconciler) reconcileDelete(ctx context.Context, machine *clusterv1.Machine, kubernetesMachine *capkv1.KubernetesMachine, cluster *clusterv1.Cluster) (ctrl.Result, error) {
+	// If the deleted machine is a control plane node, exec kubeadm reset so the etcd member hosted on
+	// the machine gets removed in a controlled way. If the cluster has been deleted then we skip this
+	// step to stop it hanging forever in the case of control plane failure
+	if cluster.ObjectMeta.DeletionTimestamp.IsZero() && util.IsControlPlaneMachine(machine) {
 		// Check if machine pod exists
 		machinePod := &corev1.Pod{}
 		err := r.Client.Get(ctx, types.NamespacedName{
