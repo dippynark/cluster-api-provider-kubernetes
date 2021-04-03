@@ -11,9 +11,16 @@ The default flavor creates a Kubernetes cluster with the controller Nodes manage
 [KubeadmControlPlane](https://github.com/kubernetes-sigs/cluster-api/blob/master/docs/proposals/20191017-kubeadm-based-control-plane.md)
 resource and the worker Nodes managed by a
 [MachineDeployment](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-deployment.html)
-resource. The controller Nodes write etcd state to the container file system and the corresponding
-KubernetesMachines will fail if the underlying Pods fails, relying on the
+resource.
+
+The controller Nodes write etcd state to an
+[emptyDir](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) volume and the
+corresponding KubernetesMachines will fail if the underlying Pods fail, relying on the
 KubeadmControlPlane for remediation.
+
+The worker Nodes will fail if their underlying Pods fail, relying on the MachineDeployment and a
+[MachineHealthCheck](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-health-check.html)
+for remediation.
 
 ```sh
 CLUSTER_NAME="example"
@@ -48,14 +55,20 @@ by a
 [KubeadmControlPlane](https://github.com/kubernetes-sigs/cluster-api/blob/master/docs/proposals/20191017-kubeadm-based-control-plane.md)
 resource and the worker Nodes managed by a
 [MachineDeployment](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-deployment.html)
-resource. PersistentVolumes are dynamically provisioned for the controller Nodes to write etcd state
-and the corresponding KubernetesMachines are configured to recreate the underlying Pod if it is
-deleted as described in [persistence.md](persistence.md).
+resource.
+
+PersistentVolumes are dynamically provisioned for the controller Nodes to write etcd state and the
+corresponding KubernetesMachines are configured to recreate their underlying Pods if they fail as
+described in [persistence.md](persistence.md).
+
+The worker Nodes will fail if their underlying Pods fail, relying on the MachineDeployment and a
+[MachineHealthCheck](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/machine-health-check.html)
+for remediation.
 
 ```sh
 CLUSTER_NAME="example"
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
-export ETCD_STORAGE_CLASS_NAME="ssd"
+export ETCD_STORAGE_CLASS_NAME="premium-rwo"
 export ETCD_STORAGE_SIZE="1Gi"
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
