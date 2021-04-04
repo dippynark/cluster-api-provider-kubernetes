@@ -10,7 +10,7 @@ CONTROLLER_TOOLS_VERSION = v0.5.0
 
 CAPI_VERSION = v0.3.15
 CERT_MANAGER_VERSION = v1.1.0
-KUBERNETES_VERSION = v1.20.2
+KUBERNETES_VERSION = v1.17.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

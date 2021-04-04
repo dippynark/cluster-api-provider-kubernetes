@@ -27,7 +27,7 @@ CLUSTER_NAME="example"
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
-  --kubernetes-version v1.20.2 \
+  --kubernetes-version v1.17.0 \
   --control-plane-machine-count 1 \
   --worker-machine-count 1 \
   | kubectl apply -f -
@@ -72,7 +72,7 @@ export ETCD_STORAGE_CLASS_NAME="premium-rwo"
 export ETCD_STORAGE_SIZE="1Gi"
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
-  --kubernetes-version v1.20.2 \
+  --kubernetes-version v1.17.0 \
   --control-plane-machine-count 1 \
   --worker-machine-count 1 \
   --flavor persistent-control-plane \

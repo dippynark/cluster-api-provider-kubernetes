@@ -89,7 +89,7 @@ export KUBERNETES_WORKER_MACHINE_MEMORY_REQUEST="512Mi"
 # https://github.com/kubernetes-sigs/kind/releases
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
-  --kubernetes-version v1.20.2 \
+  --kubernetes-version 1.17.0 \
   --control-plane-machine-count 1 \
   --worker-machine-count 1 \
   | kubectl apply -f -
