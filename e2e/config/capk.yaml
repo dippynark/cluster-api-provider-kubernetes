@@ -3,17 +3,17 @@ images:
 - name: docker.io/dippynark/cluster-api-kubernetes-controller:dev
   loadBehavior: mustLoad
 # Use `make e2e_pull` to retrieve these images
-- name: gcr.io/k8s-staging-cluster-api/cluster-api-controller:v0.3.14
+- name: gcr.io/k8s-staging-cluster-api/cluster-api-controller:v0.3.15
   loadBehavior: tryLoad
-- name: gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:v0.3.14
+- name: gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:v0.3.15
   loadBehavior: tryLoad
-- name: gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:v0.3.14
+- name: gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:v0.3.15
   loadBehavior: tryLoad
-- name: quay.io/jetstack/cert-manager-webhook:v0.16.1
+- name: quay.io/jetstack/cert-manager-webhook:v1.1.0
   loadBehavior: tryLoad
-- name: quay.io/jetstack/cert-manager-controller:v0.16.1
+- name: quay.io/jetstack/cert-manager-controller:v1.1.0
   loadBehavior: tryLoad
-- name: quay.io/jetstack/cert-manager-cainjector:v0.16.1
+- name: quay.io/jetstack/cert-manager-cainjector:v1.1.0
   loadBehavior: tryLoad
 - name: kindest/node:v1.20.2
   loadBehavior: tryLoad
@@ -22,9 +22,9 @@ providers:
 - name: cluster-api
   type: CoreProvider
   versions:
-  - name: v0.3.14
+  - name: v0.3.15
     # Use manifest from source files
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/core-components.yaml"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.15/core-components.yaml"
     type: "url"
     replacements:
     - old: "imagePullPolicy: Always"
@@ -34,9 +34,9 @@ providers:
 - name: kubeadm
   type: BootstrapProvider
   versions:
-  - name: v0.3.14
+  - name: v0.3.15
     # Use manifest from source files
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/bootstrap-components.yaml"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.15/bootstrap-components.yaml"
     type: "url"
     replacements:
     - old: "imagePullPolicy: Always"
@@ -46,9 +46,9 @@ providers:
 - name: kubeadm
   type: ControlPlaneProvider
   versions:
-  - name: v0.3.14
+  - name: v0.3.15
     # Use manifest from source files
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/control-plane-components.yaml"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.15/control-plane-components.yaml"
     type: "url"
     replacements:
     - old: "imagePullPolicy: Always"

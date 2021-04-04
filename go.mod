@@ -12,7 +12,7 @@ require (
 	k8s.io/apimachinery v0.17.9
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
-	sigs.k8s.io/cluster-api v0.3.14
+	sigs.k8s.io/cluster-api v0.3.15
 	sigs.k8s.io/controller-runtime v0.5.14
 	sigs.k8s.io/kind v0.7.1-0.20200303021537-981bd80d3802
 )

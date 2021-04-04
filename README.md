@@ -56,7 +56,7 @@ kubectl apply -f hack/forward-ipencap.yaml
 ```sh
 # Install clusterctl
 # https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
-CLUSTER_API_VERSION=v0.3.14
+CLUSTER_API_VERSION=v0.3.15
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$CLUSTER_API_VERSION/clusterctl-`uname -s  | tr '[:upper:]' '[:lower:]'`-amd64 -o clusterctl
 chmod +x ./clusterctl
 sudo mv ./clusterctl /usr/local/bin/clusterctl
