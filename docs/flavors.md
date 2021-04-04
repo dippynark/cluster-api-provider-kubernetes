@@ -68,7 +68,7 @@ for remediation.
 ```sh
 CLUSTER_NAME="example"
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
-export ETCD_STORAGE_CLASS_NAME="premium-rwo"
+export ETCD_STORAGE_CLASS_NAME="ssd"
 export ETCD_STORAGE_SIZE="1Gi"
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
