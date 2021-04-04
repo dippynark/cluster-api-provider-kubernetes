@@ -4,7 +4,7 @@ We copy the upstream implementation of the bootstrap test framework package and 
 allow the image used for the kind cluster to be specified.
 
 ```sh
-cp /Users/luke/go/pkg/mod/sigs.k8s.io/cluster-api@v0.3.14/test/framework/bootstrap/* e2e/bootstrap
+cp /Users/luke/go/pkg/mod/sigs.k8s.io/cluster-api@v0.3.15/test/framework/bootstrap/* e2e/bootstrap
 ```
 
 Make the following changes to kind_provider.go

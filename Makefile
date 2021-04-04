@@ -8,8 +8,8 @@ CRD_OPTIONS ?= "crd:crdVersions=v1,maxDescLen=0"
 
 CONTROLLER_TOOLS_VERSION = v0.5.0
 
-CAPI_VERSION = v0.3.14
-CERT_MANAGER_VERSION = v0.16.1
+CAPI_VERSION = v0.3.15
+CERT_MANAGER_VERSION = v1.1.0
 KUBERNETES_VERSION = v1.20.2
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -111,7 +111,7 @@ e2e_template:
 	sed -i 's#$(shell echo $(IMG) | awk -F : '{print $$1}'):.*#$(IMG)#' $(E2E_CONF_FILE)
 	sed -i 's#KUBERNETES_VERSION: .*#KUBERNETES_VERSION: "$(KUBERNETES_VERSION)"#' $(E2E_CONF_FILE)
 	sed -i 's#gcr.io/k8s-staging-cluster-api/cluster-api-controller:.*#gcr.io/k8s-staging-cluster-api/cluster-api-controller:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
-	sed -i 's#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controlle:.*#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controlle:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
+	sed -i 's#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:.*#gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
 	sed -i 's#gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:.*#gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller:$(CAPI_VERSION)#' $(E2E_CONF_FILE)
 	sed -i 's#quay.io/jetstack/cert-manager-webhook:.*#quay.io/jetstack/cert-manager-webhook:$(CERT_MANAGER_VERSION)#' $(E2E_CONF_FILE)
 	sed -i 's#quay.io/jetstack/cert-manager-controller:.*#quay.io/jetstack/cert-manager-controller:$(CERT_MANAGER_VERSION)#' $(E2E_CONF_FILE)
