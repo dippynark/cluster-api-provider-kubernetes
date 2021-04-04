@@ -136,5 +136,6 @@ yes | gcloud container clusters delete $MANAGEMENT_CLUSTER_NAME --async
   - https://github.com/kubernetes-sigs/cluster-api/blob/master/controlplane/kubeadm/controllers/remediation.go#L158-L159
 - Improve performance of control plane
 - Improve recovery of persistent control plane with 3 nodes
+  - Use Services to keep consistent etcd hostname? This would help if all control plane nodes are deleted at once
 - Default cluster service type to ClusterIP
   - https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
