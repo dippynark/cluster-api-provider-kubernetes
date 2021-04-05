@@ -69,7 +69,7 @@ for remediation.
 CLUSTER_NAME="example"
 export KUBERNETES_CONTROL_PLANE_SERVICE_TYPE="LoadBalancer"
 export ETCD_STORAGE_CLASS_NAME="ssd"
-export ETCD_STORAGE_SIZE="1Gi"
+export ETCD_STORAGE_SIZE="10Gi"
 clusterctl config cluster $CLUSTER_NAME \
   --infrastructure kubernetes \
   --kubernetes-version v1.17.0 \
